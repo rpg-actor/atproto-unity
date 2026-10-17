@@ -45,7 +45,6 @@ namespace RpgActorUnity
         private bool _composing;
         private string _handleDid;
         private string _handleDidFor;
-        private Texture2D _tryOnTexture;
 
         private RpgActor Actor => (RpgActor)target;
         private bool SingleActor => targets.Length == 1;
@@ -63,8 +62,10 @@ namespace RpgActorUnity
 
         private void OnDisable()
         {
-            if (_tryOnTexture && (!target || Actor.Sheet != _tryOnTexture))
-                DestroyImmediate(_tryOnTexture);
+            if (!target || !_handleFocused) return;
+            serializedObject.Update();
+            CommitHandle(_handleText);
+            serializedObject.ApplyModifiedProperties();
         }
 
         public override bool RequiresConstantRepaint() => target && Actor.NeedsUpdate;
@@ -83,10 +84,7 @@ namespace RpgActorUnity
             {
                 EditorGUILayout.HelpBox("Showing an unsaved Try On preview, so the handle is ignored.", MessageType.Info);
                 if (GUILayout.Button("Back to Server", EditorStyles.miniButton, GUILayout.Width(100)))
-                {
-                    _source.enumValueIndex = (int)RpgActorSource.Server;
-                    _sheet.objectReferenceValue = null;
-                }
+                    ResetToServer();
             }
 
             EditorGUILayout.Space();
@@ -119,8 +117,9 @@ namespace RpgActorUnity
                 _handleText = shown;
 
             var e = Event.current;
-            var submitted = e.type == EventType.KeyDown && e.keyCode is KeyCode.Return or KeyCode.KeypadEnter
-                && GUI.GetNameOfFocusedControl() == HandleControl;
+            var editing = GUI.GetNameOfFocusedControl() == HandleControl;
+            var submitted = editing && e.type == EventType.KeyDown && (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter);
+            var cancelled = editing && e.type == EventType.KeyDown && e.keyCode == KeyCode.Escape;
 
             var handles = PopularHandles();
             using (new EditorGUILayout.HorizontalScope())
@@ -145,23 +144,35 @@ namespace RpgActorUnity
             if (picked != null) _handleText = picked;
 
             var focused = GUI.GetNameOfFocusedControl() == HandleControl;
-            if (picked != null || submitted || !focused)
+            if (cancelled)
             {
-                var handle = _handleText.Trim();
-                if (handle != shown)
-                {
-                    _handle.stringValue = handle;
-                    if (ShowsTryOnPreview())
-                    {
-                        _source.enumValueIndex = (int)RpgActorSource.Server;
-                        _sheet.objectReferenceValue = null;
-                    }
-                    AutocompleteField.Remember("Handle", handle);
-                }
+                _handleText = shown;
+                focused = false;
+            }
+            else if (picked != null || submitted || !focused)
+            {
+                CommitHandle(_handleText);
                 if (submitted) GUI.FocusControl(null);
                 focused = false;
             }
             _handleFocused = focused;
+        }
+
+        private void CommitHandle(string text)
+        {
+            var handle = text.Trim();
+            var shown = _handle.hasMultipleDifferentValues ? "" : _handle.stringValue;
+            if (handle == shown) return;
+            _handle.stringValue = handle;
+            if (ShowsTryOnPreview())
+                ResetToServer();
+            AutocompleteField.Remember("Handle", handle);
+        }
+
+        private void ResetToServer()
+        {
+            _source.enumValueIndex = (int)RpgActorSource.Server;
+            _sheet.objectReferenceValue = null;
         }
 
         private void DrawStatus()
@@ -272,9 +283,9 @@ namespace RpgActorUnity
             var assets = AssetCatalog.Get();
             using (new EditorGUI.IndentLevelScope())
             {
-                var did = Actor.Did ?? _tryOnDid ?? _handleDid;
-                if (did == null && !string.IsNullOrWhiteSpace(Actor.Handle) && _handleDidFor != Actor.Handle)
+                if (Actor.Did == null && !string.IsNullOrWhiteSpace(Actor.Handle) && _handleDidFor != Actor.Handle)
                     _ = ResolveHandleDid(Actor.Handle);
+                var did = Actor.Did ?? (_handleDidFor == Actor.Handle ? _handleDid : null);
                 if (did != null && _tryOnDid != did)
                 {
                     _tryOnDid = did;
@@ -412,6 +423,7 @@ namespace RpgActorUnity
         private async Awaitable ResolveHandleDid(string handle)
         {
             _handleDidFor = handle;
+            _handleDid = null;
             try
             {
                 var did = await AtProto.ResolveHandle(handle);
@@ -446,18 +458,29 @@ namespace RpgActorUnity
                 if (removedLayer && overrides.Count > 0)
                     throw new Exception("rpg.actor can't remove layers and override assets in the same preview. Clear one of them.");
 
-                var texture = RpgActor.LoadTexture(await RpgActorApi.Compose(_tryOnDid, removedLayer ? layers : null, overrides));
-                var previous = _tryOnTexture;
-                _tryOnTexture = texture;
-                SetSheet(Actor, RpgActorSource.Texture, texture);
-                if (previous) DestroyImmediate(previous);
+                var actor = Actor;
+                var did = _tryOnDid;
+                var texture = RpgActor.LoadTexture(await RpgActorApi.Compose(did, removedLayer ? layers : null, overrides));
+                if (!actor || _tryOnDid != did)
+                {
+                    DestroyImmediate(texture);
+                    return;
+                }
+
+                var previous = actor.Sheet;
+                SetSheet(actor, RpgActorSource.Texture, texture);
+                if (previous && !AssetDatabase.Contains(previous))
+                    DestroyImmediate(previous);
             }
             catch (Exception e)
             {
                 _tryOnError = e.Message;
             }
-            _composing = false;
-            Repaint();
+            finally
+            {
+                _composing = false;
+                Repaint();
+            }
         }
 
         private static List<Suggestion> PopularHandles()

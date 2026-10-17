@@ -5,6 +5,7 @@
       "depth": 0,
       "source": "local",
       "dependencies": {
+        "com.unity.modules.unitywebrequest": "1.0.0",
         "com.unity.nuget.newtonsoft-json": "3.2.2"
       }
     },
@@ -14,6 +15,7 @@
       "source": "local",
       "dependencies": {
         "actor.rpg.atproto-unity": "0.1.0",
+        "com.unity.modules.imageconversion": "1.0.0",
         "com.unity.nuget.newtonsoft-json": "3.2.2",
         "com.unity.render-pipelines.universal": "17.3.0",
         "com.unity.ugui": "2.0.0"

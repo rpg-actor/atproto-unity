@@ -34,7 +34,7 @@ namespace RpgActorUnity
             if (ReferenceEquals(sprite, _applied)) return;
             _applied = sprite;
 
-            if (!sprite)
+            if (!sprite || !sprite.texture)
             {
                 _renderer.SetPropertyBlock(null);
                 return;

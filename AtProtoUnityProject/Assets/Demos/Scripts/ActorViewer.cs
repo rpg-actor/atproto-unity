@@ -49,20 +49,29 @@ public class ActorViewer : MonoBehaviour
     {
         _notice = null;
         Actor.Handle = handle;
+        Actor.Reload();
     }
 
     private async Awaitable PickRandom()
     {
         _notice = "Finding someone...";
+        RandomButton.interactable = false;
         try
         {
             _registry ??= await RpgActorApi.GetActors();
             var actors = _registry.Where(actor => actor.Sprite != null && actor.Handle != null).ToList();
-            Load(actors[Random.Range(0, actors.Count)].Handle);
+            if (actors.Count == 0)
+                _notice = "No actors found.";
+            else
+                Load(actors[Random.Range(0, actors.Count)].Handle);
         }
         catch (Exception e)
         {
             _notice = $"rpg.actor is unavailable right now. ({e.Message})";
+        }
+        finally
+        {
+            RandomButton.interactable = true;
         }
     }
 }

@@ -20,6 +20,7 @@ public class Platformer2D : MonoBehaviour
     private ContactFilter2D _ground;
     private float _lastGroundedTime = float.NegativeInfinity;
     private float _lastJumpPressTime = float.NegativeInfinity;
+    private bool _wasDone;
 
     private void Awake()
     {
@@ -31,8 +32,11 @@ public class Platformer2D : MonoBehaviour
 
     private void Update()
     {
-        var input = Prompt.Done ? _move.ReadValue<Vector2>().x : 0;
-        if (Prompt.Done && _jump.WasPressedThisFrame())
+        var playing = Prompt.Done && _wasDone;
+        _wasDone = Prompt.Done;
+
+        var input = playing ? _move.ReadValue<Vector2>().x : 0;
+        if (playing && _jump.WasPressedThisFrame())
             _lastJumpPressTime = Time.time;
 
         var velocity = _body.linearVelocity;
@@ -43,7 +47,7 @@ public class Platformer2D : MonoBehaviour
         velocity.x = Mathf.MoveTowards(velocity.x, input * Speed, Acceleration * Time.deltaTime);
         if (Time.time - _lastJumpPressTime < JumpBufferTime && Time.time - _lastGroundedTime < CoyoteTime)
         {
-            velocity.y = JumpSpeed;
+            velocity.y = _jump.IsPressed() ? JumpSpeed : JumpSpeed * 0.5f;
             _lastJumpPressTime = _lastGroundedTime = float.NegativeInfinity;
         }
         if (_jump.WasReleasedThisFrame() && velocity.y > 0)

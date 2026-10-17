@@ -60,12 +60,13 @@ namespace RpgActorUnity
                 {
                     AddAssets(child, assets);
                 }
-                else if (value is JArray list)
+                else if (value is JArray list && list.Count > 0)
                 {
-                    assets[key] = new List<string>();
+                    var layer = key == "hands" ? "clothHands" : key;
+                    assets[layer] = new List<string>();
                     foreach (var asset in list)
                         if (asset is JObject entry && entry["name"] != null)
-                            assets[key].Add((string)entry["name"]);
+                            assets[layer].Add((string)entry["name"]);
                 }
             }
         }

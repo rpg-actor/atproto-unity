@@ -16,6 +16,9 @@ public class Walker25D : MonoBehaviour
 
     private void Update()
     {
+        _controller.enabled = Actor.Status == RpgActorStatus.Ready;
+        if (!_controller.enabled) return;
+
         var camera = Camera.main.transform;
         var forward = Vector3.ProjectOnPlane(camera.forward, Vector3.up).normalized;
         var right = Vector3.ProjectOnPlane(camera.right, Vector3.up).normalized;

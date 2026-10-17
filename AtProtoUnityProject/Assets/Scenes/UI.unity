@@ -974,8 +974,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d762854a960fa844d8a1c1b3970d7341, type: 3}
   m_Name: 
   m_EditorClassIdentifier: RpgActorUnity::RpgActorUnity.RpgActor
-  Handle: mhdante.com
-  Source: 2
+  Handle: 
+  Source: 0
   Sheet: {fileID: 0}
   Direction: 0
   IsWalking: 0

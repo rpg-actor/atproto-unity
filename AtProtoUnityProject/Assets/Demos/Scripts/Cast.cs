@@ -16,10 +16,14 @@ public class Cast : MonoBehaviour
 
     private void Update()
     {
-        if (Prompt.Done && _castFor != Prompt.Player.Handle)
+        if (!Prompt.Done)
+        {
+            _castFor = null;
+        }
+        else if (_castFor != Prompt.Player.Handle)
         {
             _castFor = Prompt.Player.Handle;
-            _ = FindCandidates(Prompt.Player);
+            _ = FindCandidates(Prompt.Player, _castFor);
         }
 
         foreach (var extra in Extras)
@@ -27,7 +31,7 @@ public class Cast : MonoBehaviour
                 extra.Handle = _candidates.Dequeue();
     }
 
-    private async Awaitable FindCandidates(RpgActor player)
+    private async Awaitable FindCandidates(RpgActor player, string castFor)
     {
         _candidates.Clear();
         foreach (var extra in Extras)
@@ -36,8 +40,16 @@ public class Cast : MonoBehaviour
         try
         {
             await player.Ready();
-            var follows = await AtProto.GetFollows(player.Did);
-            var followed = new HashSet<string>(follows.Select(profile => profile.Did));
+
+            var follows = new List<Profile>();
+            try
+            {
+                follows = await AtProto.GetFollows(player.Did);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"Couldn't load follows: {e.Message}");
+            }
 
             try
             {
@@ -48,6 +60,9 @@ public class Cast : MonoBehaviour
                 Debug.LogWarning($"rpg.actor is unavailable, casting from follows only: {e.Message}");
             }
 
+            if (_castFor != castFor) return;
+
+            var followed = new HashSet<string>(follows.Select(profile => profile.Did));
             var handles = _registry == null
                 ? follows.Select(profile => profile.Handle)
                 : _registry

@@ -2,3 +2,5 @@
 */__pycache__
 **/ProfilerCaptures
 **/.idea
+replay_pid*.log
+hs_err_pid*.log

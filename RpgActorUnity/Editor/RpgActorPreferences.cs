@@ -24,7 +24,10 @@ namespace RpgActorUnity
         {
             guiHandler = searchContext =>
             {
-                ApiKey = EditorGUILayout.PasswordField("API Key", ApiKey);
+                EditorGUI.BeginChangeCheck();
+                var apiKey = EditorGUILayout.PasswordField("API Key", ApiKey);
+                if (EditorGUI.EndChangeCheck())
+                    ApiKey = apiKey;
                 EditorGUILayout.HelpBox("Stored in EditorPrefs on this machine. Never saved to the project.", MessageType.None);
                 using (new EditorGUI.DisabledScope(!HasApiKey))
                     if (GUILayout.Button("Test", GUILayout.Width(80)))

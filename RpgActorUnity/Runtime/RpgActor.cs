@@ -95,7 +95,7 @@ namespace RpgActorUnity
 
         private void Update()
         {
-            if (Request != _loaded)
+            if (Request != _loaded || (_frames != null && !_texture))
                 _ = Load();
         }
 
@@ -103,7 +103,8 @@ namespace RpgActorUnity
         {
             var version = ++_version;
             var (handle, source, sheet) = _loaded = Request;
-            Unload();
+            var keepTexture = _ownsTexture && sheet && sheet == _texture;
+            Unload(keepTexture);
             Did = null;
             Error = null;
 
@@ -118,7 +119,7 @@ namespace RpgActorUnity
             {
                 if (source == RpgActorSource.Texture)
                 {
-                    Slice(sheet, false, 3, 4);
+                    Slice(sheet, keepTexture, 3, 4);
                 }
                 else
                 {
@@ -180,12 +181,12 @@ namespace RpgActorUnity
             }
         }
 
-        private void Unload()
+        private void Unload(bool keepTexture = false)
         {
             if (_frames != null)
                 foreach (var sprite in _frames)
                     DestroyImmediate(sprite);
-            if (_ownsTexture)
+            if (_ownsTexture && !keepTexture)
                 DestroyImmediate(_texture);
 
             _frames = null;
