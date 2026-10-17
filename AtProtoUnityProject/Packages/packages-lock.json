@@ -1,5 +1,19 @@
 {
   "dependencies": {
+    "actor.rpg.atproto-unity": {
+      "version": "file:../../AtProtoUnity",
+      "depth": 0,
+      "source": "local",
+      "dependencies": {}
+    },
+    "actor.rpg.rpg-actor-unity": {
+      "version": "file:../../RpgActorUnity",
+      "depth": 0,
+      "source": "local",
+      "dependencies": {
+        "actor.rpg.atproto-unity": "0.1.0"
+      }
+    },
     "com.unity.ai.navigation": {
       "version": "2.0.14",
       "depth": 0,

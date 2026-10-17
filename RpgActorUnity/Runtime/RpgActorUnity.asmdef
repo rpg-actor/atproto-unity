@@ -1,0 +1,16 @@
+{
+    "name": "RpgActorUnity",
+    "rootNamespace": "RpgActorUnity",
+    "references": [
+        "GUID:553c2da9d2e279a4a94caed6ab36d197"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

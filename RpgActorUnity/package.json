@@ -1,0 +1,10 @@
+{
+  "name": "actor.rpg.rpg-actor-unity",
+  "version": "0.1.0",
+  "displayName": "RpgActorUnity",
+  "description": "RPG.Actor system for Unity.",
+  "unity": "6000.3",
+  "dependencies": {
+    "actor.rpg.atproto-unity": "0.1.0"
+  }
+}
