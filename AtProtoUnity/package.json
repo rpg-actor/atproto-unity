@@ -4,5 +4,7 @@
   "displayName": "AtProtoUnity",
   "description": "AT Protocol client for Unity.",
   "unity": "6000.3",
-  "dependencies": {}
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.2"
+  }
 }

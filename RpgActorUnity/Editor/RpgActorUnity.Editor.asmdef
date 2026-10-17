@@ -1,0 +1,19 @@
+{
+    "name": "RpgActorUnity.Editor",
+    "rootNamespace": "RpgActorUnity",
+    "references": [
+        "GUID:1678261e9bf59ca4c8609d4960e7f44d",
+        "GUID:553c2da9d2e279a4a94caed6ab36d197"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
