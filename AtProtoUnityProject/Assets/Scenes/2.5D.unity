@@ -3539,7 +3539,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: AtProtoUnity::AtProtoUnity.AtProtoRecordComposer
   baseJson: '{}'
   fields:
-  - path: _meta.name
+  - path: data._meta.name
     valueType: 0
     value: Rebel Protocol
     bindingSource: {fileID: 0}
@@ -3594,8 +3594,8 @@ MonoBehaviour:
     bindingMember: 
     bound: 0
   groups:
-  - _meta
   - data
+  - data._meta
   - data.status
   - data.skills
   addCreatedAt: 1
@@ -5070,7 +5070,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 9003386587562723573, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
       propertyPath: loginMethod
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 9003386587562723573, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
       propertyPath: recordPermissions.Array.size
