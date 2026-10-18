@@ -1,0 +1,26 @@
+fileFormatVersion: 2
+guid: 4f4a12f3e3fb4781a8b9d54d57e7af20
+PluginImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  iconMap: {}
+  executionOrder: {}
+  defineConstraints: []
+  isPreloaded: 0
+  isOverridable: 1
+  platformData:
+  - first:
+      Any:
+    second:
+      enabled: 1
+      settings: {}
+  - first:
+      Editor: Editor
+    second:
+      enabled: 1
+      settings:
+        CPU: AnyCPU
+        DefaultValueInitialized: true
+  userData:
+  assetBundleName:
+  assetBundleVariant:
