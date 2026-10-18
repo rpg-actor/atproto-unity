@@ -198,5 +198,51 @@ namespace AtProtoUnity
             }
             return string.Join(" ", tokens);
         }
+
+        public static bool AllowsRecordAction(
+            AtProtoLoginMethod loginMethod,
+            string grantedScope,
+            string collection,
+            string action)
+        {
+            if (loginMethod != AtProtoLoginMethod.OAuth)
+                return true;
+            if (string.IsNullOrWhiteSpace(grantedScope)
+                || string.IsNullOrWhiteSpace(collection)
+                || string.IsNullOrWhiteSpace(action))
+                return false;
+
+            foreach (var rawToken in grantedScope.Split(
+                (char[])null,
+                StringSplitOptions.RemoveEmptyEntries))
+            {
+                var token = Uri.UnescapeDataString(rawToken.Trim());
+                if (!token.StartsWith("repo:", StringComparison.Ordinal))
+                    continue;
+
+                var queryStart = token.IndexOf('?');
+                var tokenCollection = queryStart < 0
+                    ? token.Substring("repo:".Length)
+                    : token.Substring("repo:".Length, queryStart - "repo:".Length);
+                if (!string.Equals(tokenCollection, collection.Trim(), StringComparison.Ordinal))
+                    continue;
+                if (queryStart < 0)
+                    continue;
+
+                var query = token.Substring(queryStart + 1);
+                foreach (var pair in query.Split('&'))
+                {
+                    var separator = pair.IndexOf('=');
+                    if (separator < 0)
+                        continue;
+                    var key = pair.Substring(0, separator);
+                    var value = pair.Substring(separator + 1);
+                    if (string.Equals(key, "action", StringComparison.Ordinal)
+                        && string.Equals(value, action.Trim(), StringComparison.Ordinal))
+                        return true;
+                }
+            }
+            return false;
+        }
     }
 }
