@@ -7,7 +7,6 @@ using UnityEngine.UI;
 
 public class HandlePrompt : MonoBehaviour
 {
-    private const string LastHandleKey = "Demos.LastHandle";
     private const string ActionLabel = "Login";
 
     public RpgActor Player;
@@ -38,7 +37,6 @@ public class HandlePrompt : MonoBehaviour
             LoginMethod = Login.LoginMethod;
 
         ConfigureInputs();
-        Input.text = PlayerPrefs.GetString(LastHandleKey, "");
         Input.onValueChanged.AddListener(OnHandleChanged);
         Input.onSubmit.AddListener(_ =>
         {
@@ -134,7 +132,6 @@ public class HandlePrompt : MonoBehaviour
                 loginPhase = false;
             }
 
-            PlayerPrefs.SetString(LastHandleKey, actorHandle);
             Player.Handle = actorHandle;
             Player.Reload();
             SetStatus("LOADING ACTOR\nPreparing your character...");

@@ -216,20 +216,39 @@ namespace AtProtoUnity
                 (char[])null,
                 StringSplitOptions.RemoveEmptyEntries))
             {
-                var token = Uri.UnescapeDataString(rawToken.Trim());
-                if (!token.StartsWith("repo:", StringComparison.Ordinal))
-                    continue;
+                if (RepoScopeAllows(
+                    Uri.UnescapeDataString(rawToken),
+                    collection.Trim(),
+                    action.Trim()))
+                    return true;
+            }
+            return false;
+        }
 
-                var queryStart = token.IndexOf('?');
-                var tokenCollection = queryStart < 0
-                    ? token.Substring("repo:".Length)
-                    : token.Substring("repo:".Length, queryStart - "repo:".Length);
-                if (!string.Equals(tokenCollection, collection.Trim(), StringComparison.Ordinal))
-                    continue;
-                if (queryStart < 0)
-                    continue;
+        // Accepts repo:<nsid>, repo:*, and repo?collection=<nsid>&action=<action>; no action means every action.
+        static bool RepoScopeAllows(string token, string collection, string action)
+        {
+            var collections = new List<string>();
+            var actions = new List<string>();
+            string query;
+            if (token.StartsWith("repo:", StringComparison.Ordinal))
+            {
+                var rest = token.Substring("repo:".Length);
+                var queryStart = rest.IndexOf('?');
+                collections.Add(queryStart < 0 ? rest : rest.Substring(0, queryStart));
+                query = queryStart < 0 ? null : rest.Substring(queryStart + 1);
+            }
+            else if (token.StartsWith("repo?", StringComparison.Ordinal))
+            {
+                query = token.Substring("repo?".Length);
+            }
+            else
+            {
+                return false;
+            }
 
-                var query = token.Substring(queryStart + 1);
+            if (query != null)
+            {
                 foreach (var pair in query.Split('&'))
                 {
                     var separator = pair.IndexOf('=');
@@ -237,12 +256,16 @@ namespace AtProtoUnity
                         continue;
                     var key = pair.Substring(0, separator);
                     var value = pair.Substring(separator + 1);
-                    if (string.Equals(key, "action", StringComparison.Ordinal)
-                        && string.Equals(value, action.Trim(), StringComparison.Ordinal))
-                        return true;
+                    if (key == "collection")
+                        collections.Add(value);
+                    else if (key == "action")
+                        actions.Add(value);
                 }
             }
-            return false;
+
+            if (!collections.Exists(item => item == "*" || item == collection))
+                return false;
+            return actions.Count == 0 || actions.Contains(action);
         }
     }
 }

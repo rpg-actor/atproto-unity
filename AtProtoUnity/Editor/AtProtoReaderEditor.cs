@@ -105,23 +105,23 @@ namespace AtProtoUnity.Editor
 
         // The editor cannot await between GUI frames, so EditorApplication.update polls the request.
         internal static IDisposable StartOperation(
-            AtProtoReader reader,
+            UnityEngine.Object owner,
             Func<CancellationToken, Awaitable> operationFactory,
             Action completed = null,
             string status = "Working...")
         {
-            StopOperation(reader);
+            StopOperation(owner);
 
-            var operation = new EditorOperation(reader, operationFactory, completed, status);
-            Operations[reader.GetInstanceID()] = operation;
+            var operation = new EditorOperation(owner, operationFactory, completed, status);
+            Operations[owner.GetInstanceID()] = operation;
             operation.Start();
             UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
             return operation;
         }
 
-        static string GetOperationStatus(AtProtoReader reader)
+        internal static string GetOperationStatus(UnityEngine.Object owner)
         {
-            if (reader == null || !Operations.TryGetValue(reader.GetInstanceID(), out var operation))
+            if (owner == null || !Operations.TryGetValue(owner.GetInstanceID(), out var operation))
                 return null;
             return operation.Status;
         }
@@ -139,10 +139,13 @@ namespace AtProtoUnity.Editor
                 AtProtoRecordsWindow.ShowCollections(reader);
         }
 
-        static void StopOperation(AtProtoReader reader)
+        static void StopOperation(UnityEngine.Object owner)
         {
-            // A reader owns at most one editor request, so a new action cancels the previous one.
-            var id = reader.GetInstanceID();
+            // Each component owns at most one editor request, so a new action cancels the previous one.
+            if (owner == null)
+                return;
+
+            var id = owner.GetInstanceID();
             if (Operations.TryGetValue(id, out var operation))
                 operation.Dispose();
         }
@@ -157,8 +160,8 @@ namespace AtProtoUnity.Editor
         sealed class EditorOperation : IDisposable
         {
             // This object connects one Awaitable to the editor update loop and its completion callback.
-            readonly AtProtoReader reader;
-            readonly int readerId;
+            readonly UnityEngine.Object owner;
+            readonly int ownerId;
             readonly Func<CancellationToken, Awaitable> operationFactory;
             readonly Action completed;
             public string Status { get; }
@@ -167,13 +170,13 @@ namespace AtProtoUnity.Editor
             bool stopped;
 
             public EditorOperation(
-                AtProtoReader reader,
+                UnityEngine.Object owner,
                 Func<CancellationToken, Awaitable> operationFactory,
                 Action completed,
                 string status)
             {
-                this.reader = reader;
-                readerId = reader.GetInstanceID();
+                this.owner = owner;
+                ownerId = owner.GetInstanceID();
                 this.operationFactory = operationFactory;
                 this.completed = completed;
                 Status = status;
@@ -191,7 +194,7 @@ namespace AtProtoUnity.Editor
                 catch (Exception exception)
                 {
                     Dispose();
-                    Debug.LogException(exception, reader);
+                    Debug.LogException(exception, owner);
                 }
             }
 
@@ -207,9 +210,9 @@ namespace AtProtoUnity.Editor
                 cancellation?.Dispose();
                 cancellation = null;
 
-                if (Operations.TryGetValue(readerId, out var current)
+                if (Operations.TryGetValue(ownerId, out var current)
                     && ReferenceEquals(current, this))
-                    Operations.Remove(readerId);
+                    Operations.Remove(ownerId);
 
                 UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
             }
@@ -217,7 +220,7 @@ namespace AtProtoUnity.Editor
             void Tick()
             {
                 // EditorApplication.update runs on Unity's main thread, which is required by the callback.
-                if (reader == null)
+                if (owner == null)
                 {
                     Dispose();
                     return;
@@ -239,7 +242,7 @@ namespace AtProtoUnity.Editor
                 catch (Exception exception)
                 {
                     Dispose();
-                    Debug.LogException(exception, reader);
+                    Debug.LogException(exception, owner);
                 }
             }
         }

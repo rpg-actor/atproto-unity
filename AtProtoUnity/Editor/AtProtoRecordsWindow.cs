@@ -125,6 +125,7 @@ namespace AtProtoUnity.Editor
             EditorGUILayout.LabelField(
                 $"{page.CollectionNsid ?? reader.CollectionNsid}  |  {records.Count} records",
                 EditorStyles.boldLabel);
+            DrawWriterActions(page.CollectionNsid ?? reader.CollectionNsid);
 
             scrollPosition = EditorGUILayout.BeginScrollView(
                 scrollPosition,
@@ -170,6 +171,8 @@ namespace AtProtoUnity.Editor
                 EditorGUILayout.LabelField(collection.Trim(), EditorStyles.label);
                 if (GUILayout.Button("Read", GUILayout.Width(70)))
                     selectedCollection = collection.Trim();
+                if (GUILayout.Button("Create", GUILayout.Width(70)))
+                    AtProtoWriterEditor.OpenFromReader(reader, collection.Trim(), null);
                 EditorGUILayout.EndHorizontal();
             }
 
@@ -311,6 +314,14 @@ namespace AtProtoUnity.Editor
             EditorGUILayout.SelectableLabel("PDS: " + (reader.PdsEndpoint ?? "Not resolved"));
         }
 
+        void DrawWriterActions(string collectionNsid)
+        {
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("Create Record"))
+                AtProtoWriterEditor.OpenFromReader(reader, collectionNsid, null);
+            EditorGUILayout.EndHorizontal();
+        }
+
         // Draw one collapsed or expanded record, including metadata and formatted JSON.
         void DrawRecord(RecordView record)
         {
@@ -340,6 +351,9 @@ namespace AtProtoUnity.Editor
 
                 EditorGUILayout.SelectableLabel("URI: " + record.Record.Uri);
                 EditorGUILayout.SelectableLabel("CID: " + record.Record.Cid);
+
+                if (GUILayout.Button("Update Record"))
+                    AtProtoWriterEditor.OpenFromReader(reader, record.Collection, record.Record);
 
                 DrawBlobs(record);
                 EditorGUILayout.LabelField("Record Value", EditorStyles.boldLabel);
