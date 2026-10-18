@@ -6,11 +6,21 @@ using UnityEngine;
 
 namespace AtProtoUnity.Editor
 {
-    // Adds edit-mode actions to the AtProtoReader in the Inspector.
+    // Adds actions to the AtProtoReader in the Inspector.
+    [InitializeOnLoad]
     [CustomEditor(typeof(AtProtoReader))]
     sealed class AtProtoReaderEditor : UnityEditor.Editor
     {
         static readonly Dictionary<int, EditorOperation> Operations = new();
+
+        static AtProtoReaderEditor()
+        {
+            EditorApplication.playModeStateChanged += state =>
+            {
+                if (state == PlayModeStateChange.ExitingPlayMode)
+                    StopAllOperations();
+            };
+        }
 
         // Unity redraws this method; it only starts work when a button is pressed.
         public override void OnInspectorGUI()
@@ -23,10 +33,18 @@ namespace AtProtoUnity.Editor
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("AT Protocol Actions", EditorStyles.boldLabel);
-            using (new EditorGUI.DisabledScope(EditorApplication.isPlaying))
+            var operationStatus = GetOperationStatus(reader);
+            if (operationStatus != null)
+                EditorGUILayout.HelpBox(operationStatus, MessageType.Info);
+
+            using (new EditorGUI.DisabledScope(operationStatus != null))
             {
                 if (GUILayout.Button("Resolve Handle"))
-                    StartOperation(reader, reader.ResolveHandleAsync, Repaint);
+                    StartOperation(
+                        reader,
+                        reader.ResolveHandleAsync,
+                        Repaint,
+                        "Resolving handle...");
                 if (GUILayout.Button("Explore Collections"))
                     StartOperation(
                         reader,
@@ -35,7 +53,8 @@ namespace AtProtoUnity.Editor
                         {
                             ShowCollections(reader);
                             Repaint();
-                        });
+                        },
+                        "Exploring repository collections...");
                 var collectionLabel = string.IsNullOrWhiteSpace(reader.CollectionNsid)
                     ? "Collection"
                     : reader.CollectionNsid.Trim();
@@ -54,19 +73,20 @@ namespace AtProtoUnity.Editor
                         {
                             ShowRecords(reader);
                             Repaint();
-                        });
-            }
+                        },
+                        "Reading records...");
 
-            EditorGUILayout.Space(4f);
-            using (new EditorGUI.DisabledScope(reader.LastPage == null))
-            {
-                var viewerContent = new GUIContent(
-                    "Open Record Viewer",
-                    reader.LastPage == null
-                        ? "Read records first to populate the viewer."
-                        : "Open the most recently read record page.");
-                if (GUILayout.Button(viewerContent))
-                    ShowRecords(reader);
+                EditorGUILayout.Space(4f);
+                using (new EditorGUI.DisabledScope(reader.LastPage == null))
+                {
+                    var viewerContent = new GUIContent(
+                        "Open Record Viewer",
+                        reader.LastPage == null
+                            ? "Read records first to populate the viewer."
+                            : "Open the most recently read record page.");
+                    if (GUILayout.Button(viewerContent))
+                        ShowRecords(reader);
+                }
             }
 
             EditorGUILayout.Space();
@@ -81,28 +101,29 @@ namespace AtProtoUnity.Editor
                     : "PDS: " + reader.PdsEndpoint,
                 EditorStyles.textField,
                 GUILayout.Height(EditorGUIUtility.singleLineHeight));
-
-            if (EditorApplication.isPlaying)
-            {
-                EditorGUILayout.HelpBox(
-                    "Inspector actions run in edit mode only. "
-                    + "In play mode, call AtProtoReader.ResolveHandle or ReadRecords from code.",
-                    MessageType.Info);
-            }
         }
 
         // The editor cannot await between GUI frames, so EditorApplication.update polls the request.
         internal static IDisposable StartOperation(
             AtProtoReader reader,
             Func<CancellationToken, Awaitable> operationFactory,
-            Action completed = null)
+            Action completed = null,
+            string status = "Working...")
         {
             StopOperation(reader);
 
-            var operation = new EditorOperation(reader, operationFactory, completed);
+            var operation = new EditorOperation(reader, operationFactory, completed, status);
             Operations[reader.GetInstanceID()] = operation;
             operation.Start();
+            UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
             return operation;
+        }
+
+        static string GetOperationStatus(AtProtoReader reader)
+        {
+            if (reader == null || !Operations.TryGetValue(reader.GetInstanceID(), out var operation))
+                return null;
+            return operation.Status;
         }
 
         static void ShowRecords(AtProtoReader reader)
@@ -126,6 +147,13 @@ namespace AtProtoUnity.Editor
                 operation.Dispose();
         }
 
+        static void StopAllOperations()
+        {
+            AtProtoRecordsWindow.StopPlayModeOperations();
+            foreach (var operation in new List<EditorOperation>(Operations.Values))
+                operation.Dispose();
+        }
+
         sealed class EditorOperation : IDisposable
         {
             // This object connects one Awaitable to the editor update loop and its completion callback.
@@ -133,6 +161,7 @@ namespace AtProtoUnity.Editor
             readonly int readerId;
             readonly Func<CancellationToken, Awaitable> operationFactory;
             readonly Action completed;
+            public string Status { get; }
             CancellationTokenSource cancellation;
             Awaitable operation;
             bool stopped;
@@ -140,12 +169,14 @@ namespace AtProtoUnity.Editor
             public EditorOperation(
                 AtProtoReader reader,
                 Func<CancellationToken, Awaitable> operationFactory,
-                Action completed)
+                Action completed,
+                string status)
             {
                 this.reader = reader;
                 readerId = reader.GetInstanceID();
                 this.operationFactory = operationFactory;
                 this.completed = completed;
+                Status = status;
             }
 
             public void Start()
@@ -179,6 +210,8 @@ namespace AtProtoUnity.Editor
                 if (Operations.TryGetValue(readerId, out var current)
                     && ReferenceEquals(current, this))
                     Operations.Remove(readerId);
+
+                UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
             }
 
             void Tick()

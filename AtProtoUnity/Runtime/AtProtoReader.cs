@@ -13,6 +13,8 @@ namespace AtProtoUnity
         [SerializeField] bool resolveOnStart;
         [SerializeField] string identityEndpoint = AtProtoClient.DefaultIdentityEndpoint;
         [SerializeField] string plcDirectoryEndpoint = AtProtoClient.DefaultPlcDirectoryEndpoint;
+        [SerializeField] AtProtoLogin login;
+        [SerializeField] bool useLoginIdentity;
 
         AtProtoClient client;
         string clientIdentityEndpoint;
@@ -39,6 +41,18 @@ namespace AtProtoUnity
         }
 
         public AtProtoIdentity Identity => identity;
+        public AtProtoLogin Login
+        {
+            get => login;
+            set => login = value;
+        }
+
+        public bool UseLoginIdentity
+        {
+            get => useLoginIdentity;
+            set => useLoginIdentity = value;
+        }
+
         public string Did => identity?.Did;
         public string PdsEndpoint => identity?.PdsEndpoint;
         public AtProtoRecordPage LastPage { get; private set; }
@@ -91,6 +105,16 @@ namespace AtProtoUnity
             CancellationToken cancellationToken = default)
         {
             EnsureClient();
+            if (useLoginIdentity)
+            {
+                if (login == null || login.Identity == null)
+                    return AtProtoResult<AtProtoIdentity>.Failure(
+                        new AtProtoRequestError("An authenticated AtProtoLogin session is required."));
+
+                SetIdentity(login.Identity);
+                return AtProtoResult<AtProtoIdentity>.Success(identity);
+            }
+
             var result = await client.ResolveHandleAsync(handle, cancellationToken);
             if (result.Succeeded)
                 SetIdentity(result.Value);
@@ -112,12 +136,19 @@ namespace AtProtoUnity
                 ? collectionNsid
                 : requestedCollectionNsid;
             var selectedLimit = requestedLimit < 1 ? limit : requestedLimit;
-            var result = await client.ListRecordsAsync(
-                identityResult.Value,
-                selectedCollection,
-                selectedLimit,
-                cursor,
-                cancellationToken);
+            var result = HasAuthenticatedTransport
+                ? await login.AuthenticatedClient.ListRecordsAsync(
+                    identityResult.Value,
+                    selectedCollection,
+                    selectedLimit,
+                    cursor,
+                    cancellationToken)
+                : await client.ListRecordsAsync(
+                    identityResult.Value,
+                    selectedCollection,
+                    selectedLimit,
+                    cursor,
+                    cancellationToken);
             if (result.Succeeded)
             {
                 LastPage = result.Value;
@@ -158,11 +189,17 @@ namespace AtProtoUnity
             if (!identityResult.Succeeded)
                 return AtProtoResult<AtProtoRecord>.Failure(identityResult.Error);
 
-            return await client.GetRecordAsync(
-                identityResult.Value,
-                requestedCollectionNsid,
-                recordKey,
-                cancellationToken);
+            return HasAuthenticatedTransport
+                ? await login.AuthenticatedClient.GetRecordAsync(
+                    identityResult.Value,
+                    requestedCollectionNsid,
+                    recordKey,
+                    cancellationToken)
+                : await client.GetRecordAsync(
+                    identityResult.Value,
+                    requestedCollectionNsid,
+                    recordKey,
+                    cancellationToken);
         }
 
         public async Awaitable<AtProtoResult<T>> FetchRecordAsync<T>(
@@ -175,11 +212,17 @@ namespace AtProtoUnity
             if (!identityResult.Succeeded)
                 return AtProtoResult<T>.Failure(identityResult.Error);
 
-            return await client.GetRecordAsync<T>(
-                identityResult.Value,
-                requestedCollectionNsid,
-                recordKey,
-                cancellationToken);
+            return HasAuthenticatedTransport
+                ? await login.AuthenticatedClient.GetRecordAsync<T>(
+                    identityResult.Value,
+                    requestedCollectionNsid,
+                    recordKey,
+                    cancellationToken)
+                : await client.GetRecordAsync<T>(
+                    identityResult.Value,
+                    requestedCollectionNsid,
+                    recordKey,
+                    cancellationToken);
         }
 
         public Awaitable ReadRecordsAsync(CancellationToken cancellationToken = default)
@@ -251,7 +294,9 @@ namespace AtProtoUnity
             CancellationToken cancellationToken = default)
         {
             EnsureClient();
-            return client.GetBlobAsync(identity, cid, cancellationToken);
+            return HasAuthenticatedTransport
+                ? login.AuthenticatedClient.GetBlobAsync(identity, cid, cancellationToken)
+                : client.GetBlobAsync(identity, cid, cancellationToken);
         }
 
         // Clears cached identity and, for a new read, the previous page before lookup.
@@ -259,10 +304,23 @@ namespace AtProtoUnity
             CancellationToken cancellationToken,
             bool clearRecordPage = true)
         {
-            identity = null;
             if (clearRecordPage)
                 LastPage = null;
             LastRepositoryDescription = null;
+
+            if (useLoginIdentity)
+            {
+                identity = login?.Identity;
+                if (identity == null)
+                    LogFailure(
+                        "Authenticated identity resolution",
+                        new AtProtoRequestError("An authenticated AtProtoLogin session is required."));
+                else
+                    SetIdentity(identity);
+                return;
+            }
+
+            identity = null;
 
             var result = await client.ResolveHandleAsync(handle, cancellationToken);
 
@@ -297,12 +355,19 @@ namespace AtProtoUnity
             if (!preserveCurrentPage)
                 LastPage = null;
 
-            var result = await client.ListRecordsAsync(
-                identity,
-                selectedCollection,
-                selectedLimit,
-                cursor,
-                cancellationToken);
+            var result = HasAuthenticatedTransport
+                ? await login.AuthenticatedClient.ListRecordsAsync(
+                    identity,
+                    selectedCollection,
+                    selectedLimit,
+                    cursor,
+                    cancellationToken)
+                : await client.ListRecordsAsync(
+                    identity,
+                    selectedCollection,
+                    selectedLimit,
+                    cursor,
+                    cancellationToken);
 
             if (!result.Succeeded)
             {
@@ -325,9 +390,13 @@ namespace AtProtoUnity
             if (identity == null)
                 return;
 
-            var result = await client.DescribeRepoAsync(
-                identity,
-                cancellationToken);
+            var result = HasAuthenticatedTransport
+                ? await login.AuthenticatedClient.DescribeRepoAsync(
+                    identity,
+                    cancellationToken)
+                : await client.DescribeRepoAsync(
+                    identity,
+                    cancellationToken);
 
             if (!result.Succeeded)
             {
@@ -375,6 +444,9 @@ namespace AtProtoUnity
             clientIdentityEndpoint = identityEndpoint;
             clientPlcDirectoryEndpoint = plcDirectoryEndpoint;
         }
+
+        bool HasAuthenticatedTransport =>
+            useLoginIdentity && login != null && login.AuthenticatedClient != null;
 
         void Begin(Func<CancellationToken, Awaitable> operationFactory)
         {

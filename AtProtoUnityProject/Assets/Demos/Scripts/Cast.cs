@@ -41,10 +41,10 @@ public class Cast : MonoBehaviour
         {
             await player.Ready();
 
-            var follows = new List<Profile>();
+            var follows = new List<AtProtoProfile>();
             try
             {
-                follows = await AtProto.GetFollows(player.Did);
+                follows = await RpgActorApi.GetFollows(player.Did);
             }
             catch (Exception e)
             {

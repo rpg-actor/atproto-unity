@@ -35,6 +35,17 @@ namespace AtProtoUnity.Editor
             Open(reader, true);
         }
 
+        internal static void StopPlayModeOperations()
+        {
+            foreach (var window in Resources.FindObjectsOfTypeAll<AtProtoRecordsWindow>())
+            {
+                window.StopPageRead();
+                window.StopImageLoading();
+                window.loadingPage = false;
+                window.appendLoadedPage = false;
+            }
+        }
+
         static void Open(AtProtoReader reader, bool collections)
         {
             var window = GetWindow<AtProtoRecordsWindow>("AT Protocol Records");
@@ -79,6 +90,9 @@ namespace AtProtoUnity.Editor
                 EditorGUILayout.HelpBox("Select an AtProtoReader with records to view.", MessageType.Info);
                 return;
             }
+
+            if (AnyImageLoading())
+                EditorGUILayout.HelpBox("Loading image previews...", MessageType.Info);
 
             if (showingCollections)
             {
@@ -202,7 +216,8 @@ namespace AtProtoUnity.Editor
                     if (reader.LastPage == displayedPage)
                         appendLoadedPage = false;
                     Repaint();
-                });
+                },
+                appendPage ? "Loading more records..." : "Reading records...");
         }
 
         void LoadPage(AtProtoRecordPage page)
@@ -221,6 +236,19 @@ namespace AtProtoUnity.Editor
 
             foreach (var record in page.Records)
                 records.Add(new RecordView(record));
+        }
+
+        bool AnyImageLoading()
+        {
+            foreach (var record in records)
+            {
+                foreach (var blob in record.Blobs)
+                {
+                    if (blob.Loading)
+                        return true;
+                }
+            }
+            return false;
         }
 
         void DestroyTextures()
@@ -262,6 +290,10 @@ namespace AtProtoUnity.Editor
                         else
                             blob.Error = result.Error.ToString();
                     }
+                    catch (Exception exception) when (!(exception is OperationCanceledException))
+                    {
+                        blob.Error = exception.Message;
+                    }
                     finally
                     {
                         blob.Loading = false;
@@ -297,7 +329,13 @@ namespace AtProtoUnity.Editor
                     StopImageLoading();
                     imageLoadOperation = AtProtoReaderEditor.StartOperation(
                         reader,
-                        LoadImagesAsync);
+                        LoadImagesAsync,
+                        () =>
+                        {
+                            imageLoadOperation = null;
+                            Repaint();
+                        },
+                        "Loading image previews...");
                 }
 
                 EditorGUILayout.SelectableLabel("URI: " + record.Record.Uri);
