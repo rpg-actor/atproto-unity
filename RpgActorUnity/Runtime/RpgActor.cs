@@ -144,15 +144,18 @@ namespace RpgActorUnity
 
         private static async Awaitable<(string Did, Texture2D Texture, int Columns, int Rows)> Download(string handle, RpgActorSource source)
         {
-            var did = await AtProto.ResolveHandle(handle);
+            var identity = await RpgActorApi.ResolveHandle(handle);
+            var did = identity.Did;
             if (source == RpgActorSource.RpgActor)
                 return (did, LoadTexture(await RpgActorApi.GetNormalizedSheet(did)), 3, 4);
 
-            var pds = await AtProto.ResolvePds(did);
-            var record = await AtProto.GetRecord<SpriteRecord>(pds, did, "actor.rpg.sprite", "self");
+            var record = await RpgActorApi.Require(
+                RpgActorApi.Client.GetRecordAsync<SpriteRecord>(identity, "actor.rpg.sprite", "self"));
             if (record?.SpriteSheet?.Ref == null)
                 throw new Exception($"{handle} has no sprite sheet.");
-            return (did, LoadTexture(await AtProto.GetBlob(pds, did, record.SpriteSheet)), record.Columns, record.Rows);
+            var blob = await RpgActorApi.Require(
+                RpgActorApi.Client.GetBlobBytesAsync(identity, record.SpriteSheet.Ref.Cid));
+            return (did, LoadTexture(blob), record.Columns, record.Rows);
         }
 
         private void Slice(Texture2D texture, bool ownsTexture, int columns, int rows)
@@ -198,7 +201,7 @@ namespace RpgActorUnity
 
         private class SpriteRecord
         {
-            public Blob SpriteSheet;
+            public AtProtoBlob SpriteSheet;
             public int Columns = 3;
             public int Rows = 4;
         }

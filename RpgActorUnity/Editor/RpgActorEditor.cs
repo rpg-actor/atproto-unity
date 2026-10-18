@@ -426,8 +426,8 @@ namespace RpgActorUnity
             _handleDid = null;
             try
             {
-                var did = await AtProto.ResolveHandle(handle);
-                if (_handleDidFor == handle) _handleDid = did;
+                var identity = await RpgActorApi.ResolveHandle(handle);
+                if (_handleDidFor == handle) _handleDid = identity.Did;
             }
             catch (Exception e)
             {

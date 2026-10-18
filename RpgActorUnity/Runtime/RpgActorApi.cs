@@ -9,46 +9,67 @@ namespace RpgActorUnity
     public static class RpgActorApi
     {
         public static string Url = "https://rpg.actor/api";
+        public static AtProtoClient Client { get; } = new AtProtoClient { TimeoutSeconds = 30 };
 
         public static Awaitable<byte[]> GetNormalizedSheet(string did) =>
-            AtProto.GetBytes($"{Url}/sprite/normalized?did={AtProto.Escape(did)}");
+            Require(Client.GetBytesAsync($"{Url}/sprite/normalized?did={Uri.EscapeDataString(did)}"));
+
+        public static async Awaitable<AtProtoIdentity> ResolveHandle(string handle) =>
+            await Require(Client.ResolveHandleAsync(handle));
 
         public static async Awaitable<ActorEntry[]> GetActors()
         {
-            var response = await AtProto.GetJson<ActorsResponse>($"{Url}/actors/full");
+            var response = await Require(Client.GetJsonAsync<ActorsResponse>($"{Url}/actors/full"));
             return response.Actors ?? Array.Empty<ActorEntry>();
         }
 
         public static async Awaitable<List<EquipmentItem>> GetEquipment(string did)
         {
-            var pds = await AtProto.ResolvePds(did);
-            return await AtProto.ListRecords<EquipmentItem>(pds, did, "equipment.rpg.item");
+            var identity = await ResolveDid(did);
+            return await Require(Client.ListAllRecordsAsync<EquipmentItem>(identity, "equipment.rpg.item"));
         }
 
         public static async Awaitable<JArray> GetGeneratorLayers(string did)
         {
-            var pds = await AtProto.ResolvePds(did);
-            var generator = await AtProto.GetRecord<JObject>(pds, did, "actor.rpg.generator", "self");
+            var identity = await ResolveDid(did);
+            var generator = await Require(Client.GetRecordAsync<JObject>(identity, "actor.rpg.generator", "self"));
             return generator?["layers"] as JArray ?? throw new Exception($"{did} has no generator layers.");
         }
 
         public static async Awaitable<Dictionary<string, List<string>>> GetGeneratorAssets()
         {
-            var manifest = await AtProto.GetJson<JObject>($"{Url}/generator/manifest");
+            var manifest = await Require(Client.GetJsonAsync<JObject>($"{Url}/generator/manifest"));
             var assets = new Dictionary<string, List<string>>();
             AddAssets(manifest, assets);
             return assets;
         }
 
         public static Awaitable<CreatorItemList> GetCreatorItems(string apiKey) =>
-            AtProto.GetJson<CreatorItemList>($"{Url}/creator/items", apiKey);
+            Require(Client.GetJsonAsync<CreatorItemList>($"{Url}/creator/items", apiKey));
 
         public static Awaitable<byte[]> Compose(string did, JArray layers = null, Dictionary<string, string> layerOverrides = null)
         {
             var body = new JObject { ["did"] = did };
             if (layers != null) body["layers"] = layers;
             if (layerOverrides is { Count: > 0 }) body["layerOverrides"] = JObject.FromObject(layerOverrides);
-            return AtProto.PostJson($"{Url}/generator/compose", body);
+            return Require(Client.PostJsonAsync($"{Url}/generator/compose", body));
+        }
+
+        public static Awaitable<List<AtProtoProfile>> GetFollows(string actor, int maxPages = 10) =>
+            Require(Client.GetFollowsAsync(actor, maxPages));
+
+        private static async Awaitable<AtProtoIdentity> ResolveDid(string did)
+        {
+            var pds = await Require(Client.ResolvePdsAsync(did));
+            return new AtProtoIdentity(null, did.Trim(), pds);
+        }
+
+        internal static async Awaitable<T> Require<T>(Awaitable<AtProtoResult<T>> request)
+        {
+            var result = await request;
+            if (!result.Succeeded)
+                throw new Exception(result.Error?.ToString() ?? "The AT Protocol request failed.");
+            return result.Value;
         }
 
         private static void AddAssets(JObject group, Dictionary<string, List<string>> assets)
@@ -101,7 +122,7 @@ namespace RpgActorUnity
         public string Category;
         public string Description;
         public string Provider;
-        public Blob Icon;
+        public AtProtoBlob Icon;
     }
 
     public class CreatorItemList
