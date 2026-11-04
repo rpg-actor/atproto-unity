@@ -100,29 +100,7 @@ namespace AtProtoUnity
 
         public static bool IsValidCollection(string value)
         {
-            if (string.IsNullOrWhiteSpace(value) || value.Length > 253)
-                return false;
-
-            var parts = value.Split('.');
-            if (parts.Length < 3)
-                return false;
-
-            foreach (var part in parts)
-            {
-                if (part.Length == 0 || part.Length > 63
-                    || part[0] == '-' || part[part.Length - 1] == '-')
-                    return false;
-
-                foreach (var character in part)
-                {
-                    if (!(character >= 'a' && character <= 'z')
-                        && !(character >= 'A' && character <= 'Z')
-                        && !(character >= '0' && character <= '9')
-                        && character != '-')
-                        return false;
-                }
-            }
-            return true;
+            return AtProtoLexiconClient.IsValidNsid(value);
         }
     }
 
