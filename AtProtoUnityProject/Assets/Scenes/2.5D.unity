@@ -705,6 +705,37 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!1 &199072716
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 199072717}
+  m_Layer: 0
+  m_Name: -----------
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &199072717
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 199072716}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 248.72926, y: 107.63418, z: -183.61328}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &238751817
 GameObject:
   m_ObjectHideFlags: 0
@@ -1233,7 +1264,7 @@ GameObject:
   - component: {fileID: 343664729}
   - component: {fileID: 343664728}
   m_Layer: 0
-  m_Name: Cast
+  m_Name: RPG Actor (Cast)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2180,7 +2211,7 @@ GameObject:
   - component: {fileID: 789454875}
   - component: {fileID: 789454874}
   m_Layer: 0
-  m_Name: Actor
+  m_Name: RPG Actor (Player)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2953,6 +2984,140 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 825887614}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &862614604
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 862614606}
+  - component: {fileID: 862614605}
+  - component: {fileID: 862614607}
+  m_Layer: 0
+  m_Name: AT Proto Writer
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &862614605
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 862614604}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1d6767b8d2c946d1a7393351ecc50bdd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: AtProtoUnity::AtProtoUnity.AtProtoSchemaComposer
+  nsid: buzz.bookhive.book
+  identityEndpoint: https://public.api.bsky.app
+  plcDirectoryEndpoint: https://plc.directory
+  dnsOverHttpsEndpoint: https://cloudflare-dns.com/dns-query
+  schemaNsid: buzz.bookhive.book
+  schemaSourceDid: did:plc:enu2j5xjlqsjaylv3du4myh4
+  schemaSourcePdsEndpoint: https://bluesky.nickthesick.com
+  schemaRecordCid: bafyreialscgpknm7si2e2imqbejkpvk3djcww7bim3rnvgqeyw6s7rnpcu
+  schemaJson: '{"id":"buzz.bookhive.book","defs":{"main":{"key":"tid","type":"record","record":{"type":"object","required":["title","authors","hiveId","createdAt"],"properties":{"cover":{"type":"blob","accept":["image/png","image/jpeg"],"maxSize":1000000,"description":"Cover
+    image of the book"},"owned":{"type":"boolean","description":"Whether the user
+    owns this book"},"stars":{"type":"integer","maximum":10,"minimum":1,"description":"Number
+    of stars given to the book (1-10) which will be mapped to 1-5 stars"},"title":{"type":"string","maxLength":512,"minLength":1,"description":"The
+    title of the book"},"hiveId":{"type":"string","description":"The book''s hive
+    id, used to correlate user''s books with the hive"},"review":{"type":"string","description":"The
+    book''s review","maxGraphemes":15000},"status":{"type":"string","knownValues":["buzz.bookhive.defs#finished","buzz.bookhive.defs#reading","buzz.bookhive.defs#wantToRead","buzz.bookhive.defs#abandoned"]},"authors":{"type":"string","maxLength":2048,"minLength":1,"description":"The
+    authors of the book (tab separated)"},"createdAt":{"type":"string","format":"datetime"},"startedAt":{"type":"string","format":"datetime","description":"The
+    date the user started reading the book"},"finishedAt":{"type":"string","format":"datetime","description":"The
+    date the user finished reading the book"},"hiveBookUri":{"type":"string","description":"AT-URI
+    of the canonical catalogBook record in @bookhive.buzz"},"identifiers":{"ref":"buzz.bookhive.defs#bookIdentifiers","type":"ref","description":"External
+    identifiers for the book"},"bookProgress":{"ref":"buzz.bookhive.defs#bookProgress","type":"ref","description":"Progress
+    tracking details for the book"}}},"description":"A book in the user''s library"}},"$type":"com.atproto.lexicon.schema","lexicon":1}'
+  dependenciesJson: '{"buzz.bookhive.defs":{"id":"buzz.bookhive.defs","defs":{"review":{"type":"object","required":["review","createdAt","did","handle"],"properties":{"did":{"type":"string","description":"The
+    DID of the user who made the review"},"stars":{"type":"integer","description":"The
+    number of stars given to the book"},"handle":{"type":"string","description":"The
+    handle of the user who made the review"},"review":{"type":"string","description":"The
+    review content"},"createdAt":{"type":"string","format":"datetime","description":"The
+    date the review was created"}}},"comment":{"type":"object","required":["comment","createdAt","book","parent","did","handle"],"properties":{"did":{"type":"string","description":"The
+    DID of the user who made the comment"},"book":{"ref":"com.atproto.repo.strongRef","type":"ref"},"handle":{"type":"string","description":"The
+    handle of the user who made the comment"},"parent":{"ref":"com.atproto.repo.strongRef","type":"ref"},"comment":{"type":"string","maxLength":100000,"description":"The
+    content of the comment.","maxGraphemes":10000},"createdAt":{"type":"string","format":"datetime","description":"Client-declared
+    timestamp when this comment was originally created."}}},"profile":{"type":"object","required":["displayName","handle","booksRead","reviews"],"properties":{"avatar":{"type":"string"},"handle":{"type":"string"},"reviews":{"type":"integer","minimum":0},"booksRead":{"type":"integer","minimum":0},"description":{"type":"string"},"displayName":{"type":"string"},"isFollowing":{"type":"boolean","description":"Whether
+    the authed user is following this profile"}}},"reading":{"type":"token","description":"User
+    is currently reading the book"},"activity":{"type":"object","required":["type","createdAt","hiveId","title","userDid","userHandle"],"properties":{"type":{"type":"string","knownValues":["review","rated","started","finished"]},"title":{"type":"string","description":"The
+    title of the book"},"hiveId":{"type":"string","description":"The hive id of the
+    book"},"userDid":{"type":"string","description":"The DID of the user who added
+    the book"},"createdAt":{"type":"string","format":"datetime"},"userHandle":{"type":"string","description":"The
+    handle of the user who added the book"}}},"finished":{"type":"token","description":"User
+    has finished reading the book"},"userBook":{"type":"object","required":["userDid","title","authors","hiveId","createdAt","thumbnail"],"properties":{"cover":{"type":"string","description":"Cover
+    image of the book"},"owned":{"type":"boolean","description":"Whether the user
+    owns this book"},"stars":{"type":"integer","maximum":10,"minimum":1,"description":"Number
+    of stars given to the book (1-10) which will be mapped to 1-5 stars"},"title":{"type":"string","maxLength":512,"minLength":1,"description":"The
+    title of the book"},"hiveId":{"type":"string","description":"The book''s hive
+    id, used to correlate user''s books with the hive"},"rating":{"type":"integer","maximum":1000,"minimum":0,"description":"Average
+    rating (0-1000)"},"review":{"type":"string","description":"The book''s review","maxGraphemes":15000},"status":{"type":"string","knownValues":["buzz.bookhive.defs#finished","buzz.bookhive.defs#reading","buzz.bookhive.defs#wantToRead","buzz.bookhive.defs#abandoned"]},"authors":{"type":"string","maxLength":2048,"minLength":1,"description":"The
+    authors of the book (tab separated)"},"userDid":{"type":"string","description":"The
+    DID of the user who added the book"},"createdAt":{"type":"string","format":"datetime"},"startedAt":{"type":"string","format":"datetime","description":"The
+    date the user started reading the book"},"thumbnail":{"type":"string","description":"Cover
+    image of the book"},"finishedAt":{"type":"string","format":"datetime","description":"The
+    date the user finished reading the book"},"userHandle":{"type":"string","description":"The
+    handle of the user who added the book"},"description":{"type":"string","maxLength":5000,"description":"Book
+    description/summary"},"identifiers":{"ref":"buzz.bookhive.defs#bookIdentifiers","type":"ref","description":"External
+    identifiers for the book"},"bookProgress":{"ref":"buzz.bookhive.defs#bookProgress","type":"ref","description":"Progress
+    tracking information for the book"}}},"abandoned":{"type":"token","description":"User
+    has abandoned the book"},"wantToRead":{"type":"token","description":"User wants
+    to read the book"},"bookProgress":{"type":"object","required":["updatedAt"],"properties":{"percent":{"type":"integer","maximum":100,"minimum":0,"description":"How
+    far through the book the reader is (0-100)"},"updatedAt":{"type":"string","format":"datetime","description":"When
+    the progress was last updated"},"totalPages":{"type":"integer","minimum":1,"description":"Total
+    number of pages in the book"},"currentPage":{"type":"integer","minimum":1,"description":"Current
+    page the user is on"},"totalChapters":{"type":"integer","minimum":1,"description":"Total
+    number of chapters in the book"},"currentChapter":{"type":"integer","minimum":1,"description":"Current
+    chapter the user is on"}},"description":"Reading progress tracking data"},"bookIdentifiers":{"type":"object","properties":{"hiveId":{"type":"string","description":"BookHive''s
+    internal ID"},"isbn10":{"type":"string","description":"10-digit ISBN"},"isbn13":{"type":"string","description":"13-digit
+    ISBN"},"goodreadsId":{"type":"string","description":"Goodreads book ID"}},"description":"External
+    identifiers for a book"}},"$type":"com.atproto.lexicon.schema","lexicon":1},"com.atproto.repo.strongRef":{"id":"com.atproto.repo.strongRef","defs":{"main":{"type":"object","required":["uri","cid"],"properties":{"cid":{"type":"string","format":"cid"},"uri":{"type":"string","format":"at-uri"}}}},"$type":"com.atproto.lexicon.schema","lexicon":1,"description":"A
+    URI with a content-hash fingerprint."}}'
+  recordJson: '{"title":"Seeker''s Reverie","hiveId":"bk_Zbj3kgFjeFdGGBYMd8He","authors":"errantson","createdAt":"2026-11-03T17:59:54.1015413Z","$type":"buzz.bookhive.book"}'
+  fields: []
+--- !u!4 &862614606
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 862614604}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 248.72926, y: 107.63418, z: -183.61328}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &862614607
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 862614604}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a7e1ef8f8be04d71b3b3b95a8df23c1a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: AtProtoUnity::AtProtoUnity.AtProtoWriter
+  login: {fileID: 1785761017}
+  writeMode: 0
+  writeOnLogin: 0
+  requirePdsSchemaValidation: 0
+  composer: {fileID: 862614605}
+  jsonFile: {fileID: 0}
+  collectionNsid: buzz.bookhive.book
+  recordKey: 
+  expectedRecordCid: 
+  rawJson: '{}'
 --- !u!1 &943706779
 GameObject:
   m_ObjectHideFlags: 0
@@ -3359,6 +3524,37 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 1.2}
   m_SizeDelta: {x: 6, y: 0.6}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!1 &1127371371
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1127371372}
+  m_Layer: 0
+  m_Name: -----------
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1127371372
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1127371371}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 248.72926, y: 107.63418, z: -183.61328}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1127700483
 GameObject:
   m_ObjectHideFlags: 0
@@ -3471,137 +3667,6 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1127700483}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
---- !u!1 &1267094494
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1267094496}
-  - component: {fileID: 1267094495}
-  - component: {fileID: 1267094497}
-  m_Layer: 0
-  m_Name: StatsWriter
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &1267094495
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1267094494}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a7e1ef8f8be04d71b3b3b95a8df23c1a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: AtProtoUnity::AtProtoUnity.AtProtoWriter
-  login: {fileID: 1785761017}
-  writeMode: 2
-  writeOnLogin: 1
-  composer: {fileID: 1267094497}
-  jsonFile: {fileID: 0}
-  collectionNsid: actor.rpg.stats
-  recordKey: rebel
-  expectedRecordCid: 
-  rawJson: 
---- !u!4 &1267094496
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1267094494}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.03448, y: 0.46935, z: 11.75}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1267094497
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1267094494}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d2d6e2a6b0e64f55b1b9e5f38a9c7d21, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: AtProtoUnity::AtProtoUnity.AtProtoRecordComposer
-  baseJson: '{}'
-  fields:
-  - path: data._meta.name
-    valueType: 0
-    value: Rebel Protocol
-    bindingSource: {fileID: 0}
-    bindingMember: 
-    bound: 0
-  - path: data.status.Rebel
-    valueType: 1
-    value: True
-    bindingSource: {fileID: 0}
-    bindingMember: 
-    bound: 0
-  - path: data.skills.Cybercool
-    valueType: 2
-    value: 7
-    bindingSource: {fileID: 0}
-    bindingMember: 
-    bound: 0
-  - path: data.skills.Hacking
-    valueType: 2
-    value: 4
-    bindingSource: {fileID: 0}
-    bindingMember: 
-    bound: 0
-  - path: data.skills.Psywarz
-    valueType: 2
-    value: 5
-    bindingSource: {fileID: 0}
-    bindingMember: 
-    bound: 0
-  - path: data.skills.Beatdown
-    valueType: 2
-    value: 6
-    bindingSource: {fileID: 0}
-    bindingMember: 
-    bound: 0
-  - path: data.status.Living
-    valueType: 1
-    value: true
-    bindingSource: {fileID: 0}
-    bindingMember: 
-    bound: 0
-  - path: data.status.Online
-    valueType: 1
-    value: false
-    bindingSource: {fileID: 0}
-    bindingMember: 
-    bound: 0
-  - path: system
-    valueType: 0
-    value: rebel
-    bindingSource: {fileID: 0}
-    bindingMember: 
-    bound: 0
-  groups:
-  - data
-  - data._meta
-  - data.status
-  - data.skills
-  addCreatedAt: 1
-  createdAtPath: createdAt
-  addUpdatedAt: 1
-  updatedAtPath: updatedAt
 --- !u!1 &1268762369
 GameObject:
   m_ObjectHideFlags: 0
@@ -3793,7 +3858,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1279458278}
   m_Layer: 0
-  m_Name: Extras
+  m_Name: RPG Actor (NPCs)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4854,7 +4919,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 1138870554831654345, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
       propertyPath: m_Name
-      value: HandlePrompt
+      value: AT Proto Login
       objectReference: {fileID: 0}
     - target: {fileID: 2083024621425432061, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
       propertyPath: m_fontSize
@@ -5024,6 +5089,10 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 7438206153699024187, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
+      propertyPath: writer
+      value: 
+      objectReference: {fileID: 862614607}
     - target: {fileID: 7956498147165506224, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
       propertyPath: m_TextStyleHashCode
       value: -1183493901
@@ -5073,8 +5142,20 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 9003386587562723573, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
+      propertyPath: oauthRedirectMode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 9003386587562723573, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
+      propertyPath: blobPermission.upload
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 9003386587562723573, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
+      propertyPath: webGlClientMetadataUrl
+      value: http://localhost
+      objectReference: {fileID: 0}
+    - target: {fileID: 9003386587562723573, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
       propertyPath: recordPermissions.Array.size
-      value: 3
+      value: 4
       objectReference: {fileID: 0}
     - target: {fileID: 9003386587562723573, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
       propertyPath: recordPermissions.Array.data[0].create
@@ -5094,7 +5175,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 9003386587562723573, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
       propertyPath: recordPermissions.Array.data[1].delete
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 9003386587562723573, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
       propertyPath: recordPermissions.Array.data[1].update
@@ -5109,6 +5190,30 @@ PrefabInstance:
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 9003386587562723573, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
+      propertyPath: recordPermissions.Array.data[3].create
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 9003386587562723573, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
+      propertyPath: recordPermissions.Array.data[3].delete
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 9003386587562723573, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
+      propertyPath: recordPermissions.Array.data[3].update
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 9003386587562723573, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
+      propertyPath: recordPermissions.Array.data[4].create
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 9003386587562723573, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
+      propertyPath: recordPermissions.Array.data[4].delete
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 9003386587562723573, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
+      propertyPath: recordPermissions.Array.data[4].update
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 9003386587562723573, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
       propertyPath: recordPermissions.Array.data[0].collection
       value: actor.rpg.stats
       objectReference: {fileID: 0}
@@ -5119,6 +5224,14 @@ PrefabInstance:
     - target: {fileID: 9003386587562723573, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
       propertyPath: recordPermissions.Array.data[2].collection
       value: actor.rpg.sprite
+      objectReference: {fileID: 0}
+    - target: {fileID: 9003386587562723573, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
+      propertyPath: recordPermissions.Array.data[3].collection
+      value: buzz.bookhive.book
+      objectReference: {fileID: 0}
+    - target: {fileID: 9003386587562723573, guid: afbd57915c4b6194ca34be5199f05980, type: 3}
+      propertyPath: recordPermissions.Array.data[4].collection
+      value: buzz.bookhive.book
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -5633,6 +5746,37 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2051691216}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &2082097586
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2082097587}
+  m_Layer: 0
+  m_Name: -----------
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2082097587
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2082097586}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 248.72926, y: 107.63418, z: -183.61328}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2086176803
 GameObject:
   m_ObjectHideFlags: 0
@@ -5682,14 +5826,17 @@ SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
   - {fileID: 1510982305}
+  - {fileID: 1785761015}
+  - {fileID: 862614606}
+  - {fileID: 199072717}
+  - {fileID: 789454878}
+  - {fileID: 1279458278}
+  - {fileID: 343664729}
+  - {fileID: 2082097587}
   - {fileID: 2004048433}
   - {fileID: 370610078}
   - {fileID: 985220138}
   - {fileID: 2086176804}
   - {fileID: 314266092}
-  - {fileID: 789454878}
-  - {fileID: 1785761015}
+  - {fileID: 1127371372}
   - {fileID: 683412106}
-  - {fileID: 1279458278}
-  - {fileID: 343664729}
-  - {fileID: 1267094496}

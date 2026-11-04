@@ -18,11 +18,10 @@ public class HandlePrompt : MonoBehaviour
     public TMP_Text Title;
     public TMP_Text Identity;
     public bool RequireLogin;
-    public bool UseLoginComponentMethod = true;
-    public AtProtoLoginMethod LoginMethod = AtProtoLoginMethod.OAuth;
     public AtProtoLogin Login;
 
     public bool Done { get; private set; }
+    public AtProtoLoginMethod LoginMethod => Login ? Login.LoginMethod : AtProtoLoginMethod.OAuth;
 
     private TMP_Text _buttonLabel;
     private string _defaultButtonLabel;
@@ -33,8 +32,6 @@ public class HandlePrompt : MonoBehaviour
     {
         if (!Login)
             Login = GetComponent<AtProtoLogin>();
-        if (Login && UseLoginComponentMethod)
-            LoginMethod = Login.LoginMethod;
 
         ConfigureInputs();
         Input.onValueChanged.AddListener(OnHandleChanged);
@@ -47,7 +44,7 @@ public class HandlePrompt : MonoBehaviour
         });
         if (SecretInput && UsesSecret)
             SecretInput.onSubmit.AddListener(_ => Submit());
-        StartButton.onClick.AddListener(Submit);
+        StartButton.onClick.AddListener(OnStartButtonClicked);
         _buttonLabel = StartButton.GetComponentInChildren<TMP_Text>();
         _defaultButtonLabel = _buttonLabel ? _buttonLabel.text : null;
         _messageColor = Message.color;
@@ -123,8 +120,11 @@ public class HandlePrompt : MonoBehaviour
                     ? AtProtoResult<AtProtoAuthSession>.Success(Login.Session)
                     : await Login.LoginAsync(LoginMethod, requestedHandle, secret);
                 if (!loginResult.Succeeded)
+                {
+                    Debug.LogWarning("AT Protocol sign-in failed: " + loginResult.Error);
                     throw new Exception(loginResult.Error?.GetFriendlyMessage(GetCredentialLabel())
                         ?? "The login could not be completed. Try again.");
+                }
 
                 actorHandle = loginResult.Value?.Handle;
                 if (string.IsNullOrWhiteSpace(actorHandle))
@@ -142,7 +142,19 @@ public class HandlePrompt : MonoBehaviour
 
             Done = true;
             RefreshIdentity(actorHandle, true);
-            SetStatus("ACCOUNT CONFIRMED");
+            var recordPrompt = GetComponent<RecordPrompt>();
+            if (recordPrompt && recordPrompt.Writer)
+            {
+                if (Input)
+                    Input.gameObject.SetActive(false);
+                if (SecretInput)
+                    SecretInput.gameObject.SetActive(false);
+                Panel.SetActive(true);
+                StartButton.onClick.RemoveListener(OnStartButtonClicked);
+                recordPrompt.Show(Panel, StartButton, Message, Title, Identity);
+            }
+            else
+                SetStatus("ACCOUNT CONFIRMED");
         }
         catch (OperationCanceledException)
         {
@@ -178,6 +190,11 @@ public class HandlePrompt : MonoBehaviour
                 SecretInput.text = "";
             _busy = false;
         }
+    }
+
+    private void OnStartButtonClicked()
+    {
+        Submit();
     }
 
     private void OnLoginStateChanged(AtProtoLoginState state)

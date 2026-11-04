@@ -65,6 +65,7 @@ GameObject:
   - component: {fileID: 8665023067314543407}
   - component: {fileID: 2546585390216390909}
   - component: {fileID: 9003386587562723572}
+  - component: {fileID: 7438206153699024187}
   - component: {fileID: 9003386587562723573}
   m_Layer: 5
   m_Name: HandlePrompt
@@ -177,9 +178,20 @@ MonoBehaviour:
   Title: {fileID: 0}
   Identity: {fileID: 0}
   RequireLogin: 0
-  UseLoginComponentMethod: 1
-  LoginMethod: 0
   Login: {fileID: 9003386587562723573}
+--- !u!114 &7438206153699024187
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1138870554831654345}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 96ecb12fe03e4aeabeb789a3383e3348, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::RecordPrompt
+  writer: {fileID: 0}
 --- !u!114 &9003386587562723573
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -194,6 +206,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: AtProtoUnity::AtProtoUnity.AtProtoLogin
   handle:
   clientId: http://localhost
+  webGlClientMetadataUrl: http://localhost
   resource:
   identityEndpoint: https://public.api.bsky.app
   plcDirectoryEndpoint: https://plc.directory
