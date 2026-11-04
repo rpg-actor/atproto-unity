@@ -11,6 +11,7 @@ namespace AtProtoUnity.Editor
         SerializedProperty login;
         SerializedProperty writeMode;
         SerializedProperty writeOnLogin;
+        SerializedProperty requirePdsSchemaValidation;
         SerializedProperty composer;
         SerializedProperty jsonFile;
         SerializedProperty collectionNsid;
@@ -29,6 +30,7 @@ namespace AtProtoUnity.Editor
             login = serializedObject.FindProperty("login");
             writeMode = serializedObject.FindProperty("writeMode");
             writeOnLogin = serializedObject.FindProperty("writeOnLogin");
+            requirePdsSchemaValidation = serializedObject.FindProperty("requirePdsSchemaValidation");
             composer = serializedObject.FindProperty("composer");
             jsonFile = serializedObject.FindProperty("jsonFile");
             collectionNsid = serializedObject.FindProperty("collectionNsid");
@@ -100,11 +102,98 @@ namespace AtProtoUnity.Editor
         {
             EditorGUILayout.Space(6f);
             EditorGUILayout.LabelField("Target", EditorStyles.boldLabel);
-            EditorGUILayout.PropertyField(collectionNsid, new GUIContent("Collection"));
-            EditorGUILayout.PropertyField(recordKey, new GUIContent("Key"));
+            var schema = composer.objectReferenceValue as AtProtoSchemaComposer;
+            if (schema != null)
+            {
+                using (new EditorGUI.DisabledScope(true))
+                    EditorGUILayout.TextField("Collection", schema.Nsid);
+                EditorGUILayout.PropertyField(
+                    requirePdsSchemaValidation,
+                    new GUIContent(
+                        "Require PDS validation",
+                        "Sends validate: true and fails if the PDS does not recognize this lexicon. The schema composer still validates locally when this is off."));
+            }
+            else
+                EditorGUILayout.PropertyField(collectionNsid, new GUIContent("Collection"));
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.PropertyField(recordKey, new GUIContent("Key"));
+                if (EditorGUILayout.DropdownButton(
+                    new GUIContent("Key options"),
+                    FocusType.Passive,
+                    GUILayout.Width(100f)))
+                    ShowKeyOptions((AtProtoWriter)target, composer.objectReferenceValue as AtProtoSchemaComposer);
+            }
             EditorGUILayout.PropertyField(
                 expectedRecordCid,
-                new GUIContent("Expected CID"));
+                new GUIContent(
+                    "Expected CID",
+                    "A CID identifies record content for update concurrency checks. It is not a record key."));
+            if (schema != null && schema.HasSchema)
+                EditorGUILayout.HelpBox(
+                    "Generate stable TID stores a key for repeat Update/Upsert. Server-generated TID switches Mode to Create. Self and NSID are only available when allowed by this schema. CID is a revision identifier, not a key.",
+                    MessageType.Info);
+        }
+
+        static void ShowKeyOptions(AtProtoWriter writer, AtProtoSchemaComposer schema)
+        {
+            var hasSchema = schema != null && schema.HasSchema;
+            var schemaKey = hasSchema ? schema.SchemaRecordKey : null;
+            var supportsTid = schemaKey == "tid" || schemaKey == "any";
+            var supportsSelf = schemaKey == "any" || schemaKey == "literal:self";
+            var supportsNsid = schemaKey == "any" || schemaKey == "nsid";
+            var menu = new GenericMenu();
+
+            if (supportsTid)
+            {
+                menu.AddItem(
+                    new GUIContent("TID/Server-generated on Create"),
+                    false,
+                    () => ApplyKeyPreset(writer, AtProtoWriteMode.Create, string.Empty, "Use server-generated TID"));
+                menu.AddItem(
+                    new GUIContent("TID/Generate stable key"),
+                    false,
+                    () => ApplyKeyPreset(writer, writer.WriteMode, AtProtoLexiconDocument.GenerateTid(), "Generate TID key"));
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent("TID/Requires a tid or any schema"));
+                menu.AddDisabledItem(new GUIContent("TID/Generate stable key (requires tid or any schema)"));
+            }
+
+            if (supportsSelf)
+                menu.AddItem(new GUIContent("Self/Use self"), false, () => ApplyKeyPreset(writer, writer.WriteMode, "self", "Use self record key"));
+            else
+                menu.AddDisabledItem(new GUIContent("Self/Not valid for this schema key type"));
+
+            if (supportsNsid)
+                menu.AddItem(new GUIContent("NSID/Use collection NSID"), false, () => ApplyKeyPreset(writer, writer.WriteMode, schema.Nsid, "Use collection NSID as record key"));
+            else
+                menu.AddDisabledItem(new GUIContent("NSID/Not valid for this schema key type"));
+
+            if (hasSchema && schemaKey.StartsWith("literal:", StringComparison.Ordinal))
+            {
+                var literal = schemaKey.Substring("literal:".Length);
+                menu.AddItem(new GUIContent("Schema/Use literal: " + literal), false, () => ApplyKeyPreset(writer, writer.WriteMode, literal, "Use schema record key"));
+            }
+            else
+                menu.AddDisabledItem(new GUIContent("Schema/No literal key"));
+
+            menu.AddDisabledItem(new GUIContent("CID/Revision identifier, not a record key"));
+            menu.ShowAsContext();
+        }
+
+        static void ApplyKeyPreset(
+            AtProtoWriter writer,
+            AtProtoWriteMode mode,
+            string key,
+            string undoName)
+        {
+            Undo.RecordObject(writer, undoName);
+            writer.WriteMode = mode;
+            writer.RecordKey = key;
+            EditorUtility.SetDirty(writer);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(writer);
         }
 
         void DrawRecordInputSection()
@@ -218,7 +307,7 @@ namespace AtProtoUnity.Editor
             }
         }
 
-        static void DrawLastWrittenRecord(AtProtoWriter writer)
+        void DrawLastWrittenRecord(AtProtoWriter writer)
         {
             if (writer.LastWrittenRecord == null)
                 return;
@@ -227,6 +316,14 @@ namespace AtProtoUnity.Editor
             EditorGUILayout.LabelField("Last write", EditorStyles.boldLabel);
             EditorGUILayout.SelectableLabel(writer.LastWrittenRecord.Uri);
             EditorGUILayout.SelectableLabel("CID: " + writer.LastWrittenRecord.Cid);
+
+            var validation = writer.GetDeleteValidationMessage();
+            var status = AtProtoReaderEditor.GetOperationStatus(writer);
+            using (new EditorGUI.DisabledScope(status != null || validation != null))
+            {
+                if (GUILayout.Button(new GUIContent("Delete record", validation)))
+                    StartDelete(writer);
+            }
         }
 
         static string GetAuthSummary(AtProtoWriter writer)
@@ -254,6 +351,52 @@ namespace AtProtoUnity.Editor
                 cancellationToken => RunWriteAsync(writer, mode, cancellationToken),
                 Repaint,
                 GetProgressMessage(mode));
+        }
+
+        void StartDelete(AtProtoWriter writer)
+        {
+            var record = writer.LastWrittenRecord;
+            if (record == null
+                || !EditorUtility.DisplayDialog(
+                    "Delete AT Protocol record?",
+                    "Permanently delete " + record.Uri + "? The deletion will only succeed if its CID is still " + record.Cid + ".",
+                    "Delete record",
+                    "Cancel"))
+                return;
+
+            resultMessage = null;
+            AtProtoReaderEditor.StartOperation(
+                writer,
+                cancellationToken => RunDeleteAsync(writer, cancellationToken),
+                Repaint,
+                "Deleting record...");
+        }
+
+        async Awaitable RunDeleteAsync(
+            AtProtoWriter writer,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                var result = await writer.DeleteLastWrittenRecordAsync(cancellationToken);
+                if (result.Succeeded)
+                {
+                    resultMessage = "Record deleted.";
+                    resultType = MessageType.Info;
+                }
+                else
+                {
+                    resultMessage = result.Error.ToString();
+                    resultType = MessageType.Error;
+                    Debug.LogError("[AtProto] " + resultMessage, writer);
+                }
+            }
+            catch (Exception exception) when (!(exception is OperationCanceledException))
+            {
+                resultMessage = exception.Message;
+                resultType = MessageType.Error;
+                Debug.LogException(exception, writer);
+            }
         }
 
         async Awaitable RunWriteAsync(

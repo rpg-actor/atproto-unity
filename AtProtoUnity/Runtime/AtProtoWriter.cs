@@ -20,6 +20,7 @@ namespace AtProtoUnity
         [SerializeField] AtProtoLogin login;
         [SerializeField] AtProtoWriteMode writeMode = AtProtoWriteMode.Create;
         [SerializeField] bool writeOnLogin;
+        [SerializeField] bool requirePdsSchemaValidation;
         [SerializeField] MonoBehaviour composer;
         [SerializeField] TextAsset jsonFile;
         [SerializeField] string collectionNsid;
@@ -60,6 +61,12 @@ namespace AtProtoUnity
             }
         }
 
+        public bool RequirePdsSchemaValidation
+        {
+            get => requirePdsSchemaValidation;
+            set => requirePdsSchemaValidation = value;
+        }
+
         // Any component implementing IAtProtoRecordJsonSource, such as AtProtoRecordComposer.
         public MonoBehaviour Composer
         {
@@ -75,13 +82,15 @@ namespace AtProtoUnity
 
         public string CollectionNsid
         {
-            get => collectionNsid;
+            get => composer is AtProtoSchemaComposer schema ? schema.Nsid?.Trim() : collectionNsid;
             set => collectionNsid = value;
         }
 
         public string RecordKey
         {
-            get => recordKey;
+            get => string.IsNullOrEmpty(recordKey) && composer is AtProtoSchemaComposer schema
+                && schema.HasSchema && schema.SchemaRecordKey.StartsWith("literal:", StringComparison.Ordinal)
+                    ? schema.SchemaRecordKey.Substring("literal:".Length) : recordKey;
             set => recordKey = value;
         }
 
@@ -113,6 +122,7 @@ namespace AtProtoUnity
         CancellationTokenSource automaticWriteCancellation;
         string automaticWriteSessionDid;
         bool automaticWriteRunning;
+        bool lastWrittenRecordCanBeDeleted;
 
         string TargetLabel(string collection, string key)
         {
@@ -235,6 +245,10 @@ namespace AtProtoUnity
                 if (!result.Succeeded)
                 {
                     automaticWriteSessionDid = null;
+                    Debug.LogError(
+                        "[AtProto] Automatic login write failed: "
+                        + FormatWriteError(result.Error),
+                        this);
                     WriteFailed?.Invoke(result.Error);
                 }
             }
@@ -244,9 +258,11 @@ namespace AtProtoUnity
             catch (Exception exception)
             {
                 automaticWriteSessionDid = null;
-                WriteFailed?.Invoke(new AtProtoRequestError(
+                var error = new AtProtoRequestError(
                     "Automatic record write failed.",
-                    exception));
+                    exception);
+                Debug.LogError("[AtProto] " + error, this);
+                WriteFailed?.Invoke(error);
             }
             finally
             {
@@ -261,6 +277,7 @@ namespace AtProtoUnity
             expectedRecordCid = string.Empty;
             rawJson = "{}";
             LastWrittenRecord = null;
+            lastWrittenRecordCanBeDeleted = false;
         }
 
         public void LoadRecord(AtProtoRecord record)
@@ -273,6 +290,7 @@ namespace AtProtoUnity
             expectedRecordCid = record.Cid;
             rawJson = record.Value?.ToString(Formatting.Indented) ?? "{}";
             LastWrittenRecord = record;
+            lastWrittenRecordCanBeDeleted = false;
         }
 
         public const string LoginMissingMessage = "Assign an AtProtoLogin component.";
@@ -284,14 +302,22 @@ namespace AtProtoUnity
                 return LoginMissingMessage;
             if (login.Session == null || login.AuthenticatedClient == null)
                 return LoginRequiredMessage;
-            if (!AtProtoRecordPermission.IsValidCollection(collectionNsid?.Trim()))
+            var collection = CollectionNsid;
+            var key = RecordKey;
+            if (!AtProtoLexiconClient.IsValidNsid(collection?.Trim()))
                 return "Enter a valid collection NSID.";
-            if (mode != AtProtoWriteMode.Create && !IsValidRecordKey(recordKey))
+            if (mode != AtProtoWriteMode.Create && !IsValidRecordKey(key))
                 return "A valid record key is required for " + mode.ToString().ToLowerInvariant() + ".";
             if (mode == AtProtoWriteMode.Create
-                && !string.IsNullOrWhiteSpace(recordKey)
-                && !IsValidRecordKey(recordKey))
+                && !string.IsNullOrWhiteSpace(key)
+                && !IsValidRecordKey(key))
                 return "The optional record key is invalid.";
+            if (composer is AtProtoSchemaComposer schema && schema.HasSchema)
+            {
+                var keyValidation = schema.Document.GetRecordKeyValidationMessage(key, mode);
+                if (keyValidation != null)
+                    return keyValidation;
+            }
 
             var sourceResult = ResolveRecordJson();
             if (!sourceResult.Succeeded)
@@ -304,12 +330,12 @@ namespace AtProtoUnity
             var allowsCreate = AtProtoOAuthScopes.AllowsRecordAction(
                 login.Session.LoginMethod,
                 login.Session.Scope,
-                collectionNsid,
+                collection,
                 "create");
             var allowsUpdate = AtProtoOAuthScopes.AllowsRecordAction(
                 login.Session.LoginMethod,
                 login.Session.Scope,
-                collectionNsid,
+                collection,
                 "update");
             if ((mode == AtProtoWriteMode.Create && !allowsCreate)
                 || (mode == AtProtoWriteMode.Update && !allowsUpdate)
@@ -319,10 +345,77 @@ namespace AtProtoUnity
                     ? "create and update"
                     : mode.ToString().ToLowerInvariant();
                 return "The current login scope does not allow " + action
-                    + " for " + collectionNsid.Trim() + ".";
+                    + " for " + collection.Trim() + ".";
             }
 
             return null;
+        }
+
+        public string GetDeleteValidationMessage()
+        {
+            if (!lastWrittenRecordCanBeDeleted || LastWrittenRecord == null)
+                return "Write a record with this writer before deleting it.";
+            if (login == null)
+                return LoginMissingMessage;
+            if (login.Session == null || login.AuthenticatedClient == null)
+                return LoginRequiredMessage;
+
+            var identity = login.Identity;
+            var record = LastWrittenRecord;
+            if (identity == null || string.IsNullOrEmpty(identity.Did)
+                || string.IsNullOrEmpty(record.Uri)
+                || !record.Uri.StartsWith("at://" + identity.Did + "/", StringComparison.Ordinal))
+                return "The last written record does not belong to the signed-in account.";
+            if (!AtProtoLexiconClient.IsValidNsid(record.CollectionNsid)
+                || !IsValidRecordKey(record.RecordKey)
+                || string.IsNullOrWhiteSpace(record.Cid))
+                return "The last written record has an invalid URI.";
+            if (!AtProtoOAuthScopes.AllowsRecordAction(
+                login.Session.LoginMethod,
+                login.Session.Scope,
+                record.CollectionNsid,
+                "delete"))
+                return "The current login scope does not allow delete for " + record.CollectionNsid + ".";
+
+            return null;
+        }
+
+        public async Awaitable<AtProtoResult<bool>> DeleteLastWrittenRecordAsync(
+            CancellationToken cancellationToken = default)
+        {
+            var validation = GetDeleteValidationMessage();
+            if (validation != null)
+                return AtProtoResult<bool>.Failure(new AtProtoRequestError(validation));
+
+            var record = LastWrittenRecord;
+            var identity = login.Identity;
+            var request = new JObject
+            {
+                ["repo"] = identity.Did,
+                ["collection"] = record.CollectionNsid,
+                ["rkey"] = record.RecordKey,
+                ["swapRecord"] = record.Cid
+            };
+            var url = AtProtoClient.BuildXrpcUrl(
+                identity.PdsEndpoint,
+                "com.atproto.repo.deleteRecord",
+                new Dictionary<string, string>());
+            var response = await login.AuthenticatedClient.PostJsonAsync(
+                url,
+                request,
+                cancellationToken);
+            if (!response.Succeeded
+                && !(response.Error.StatusCode == 404
+                    && string.Equals(response.Error.ErrorCode, "RecordNotFound", StringComparison.OrdinalIgnoreCase)))
+                return AtProtoResult<bool>.Failure(response.Error);
+
+            if (ReferenceEquals(LastWrittenRecord, record))
+            {
+                LastWrittenRecord = null;
+                lastWrittenRecordCanBeDeleted = false;
+                expectedRecordCid = string.Empty;
+            }
+            return AtProtoResult<bool>.Success(true);
         }
 
         public Awaitable<AtProtoResult<AtProtoRecord>> CreateRecordAsync(
@@ -399,6 +492,12 @@ namespace AtProtoUnity
             AtProtoWriteMode mode,
             CancellationToken cancellationToken)
         {
+            if (composer is AtProtoSchemaComposer schema && schema.HasSchema)
+            {
+                var keyValidation = schema.Document.GetRecordKeyValidationMessage(RecordKey, mode);
+                if (keyValidation != null)
+                    return Failure(keyValidation);
+            }
             var sourceResult = ResolveRecordJson();
             if (!sourceResult.Succeeded)
             {
@@ -411,11 +510,12 @@ namespace AtProtoUnity
 
             return await WriteJsonAsync(
                 mode,
-                collectionNsid,
-                recordKey,
+                CollectionNsid,
+                RecordKey,
                 expectedRecordCid,
                 sourceResult.Value,
-                cancellationToken);
+                cancellationToken,
+                composer is AtProtoSchemaComposer && requirePdsSchemaValidation);
         }
 
         AtProtoResult<string> ResolveRecordJson()
@@ -450,7 +550,8 @@ namespace AtProtoUnity
             string requestedRecordKey,
             string requestedExpectedRecordCid,
             string requestedJson,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            bool requireSchemaValidation = false)
         {
             Debug.Log(
                 "[AtProto] " + mode + " attempt: "
@@ -464,7 +565,8 @@ namespace AtProtoUnity
                 requestedRecordKey,
                 requestedExpectedRecordCid,
                 requestedJson,
-                cancellationToken);
+                cancellationToken,
+                requireSchemaValidation);
             if (result.Succeeded)
             {
                 Debug.Log(
@@ -476,10 +578,20 @@ namespace AtProtoUnity
             {
                 Debug.LogError(
                     "[AtProto] " + mode + " failed: "
-                    + (result.Error?.ToString() ?? "Unknown write error."),
+                    + FormatWriteError(result.Error),
                     this);
             }
             return result;
+        }
+
+        static string FormatWriteError(AtProtoRequestError error)
+        {
+            if (error == null)
+                return "Unknown write error.";
+
+            return string.IsNullOrWhiteSpace(error.ResponseBody)
+                ? error.ToString()
+                : error + "\nPDS response: " + error.ResponseBody;
         }
 
         async Awaitable<AtProtoResult<AtProtoRecord>> WriteJsonCoreAsync(
@@ -488,7 +600,8 @@ namespace AtProtoUnity
             string requestedRecordKey,
             string requestedExpectedRecordCid,
             string requestedJson,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            bool requireSchemaValidation)
         {
             if (login == null)
                 return Failure("An AtProtoLogin component is required.");
@@ -496,7 +609,7 @@ namespace AtProtoUnity
                 return Failure("An authenticated AtProtoLogin session is required.");
 
             var collection = requestedCollectionNsid?.Trim();
-            if (!AtProtoRecordPermission.IsValidCollection(collection))
+            if (!AtProtoLexiconClient.IsValidNsid(collection))
                 return Failure("A valid collection NSID is required.");
 
             var key = requestedRecordKey?.Trim();
@@ -510,21 +623,24 @@ namespace AtProtoUnity
             var jsonResult = ParseRecordValue(requestedJson);
             if (!jsonResult.Succeeded)
                 return AtProtoResult<AtProtoRecord>.Failure(jsonResult.Error);
+            if (jsonResult.Value["$type"] != null && jsonResult.Value.Value<string>("$type") != collection)
+                return Failure("The record $type must match the target collection NSID.");
 
-            if (mode == AtProtoWriteMode.Upsert)
-                return await UpsertJsonAsync(
+            var allowsWrite = mode == AtProtoWriteMode.Upsert
+                ? AtProtoOAuthScopes.AllowsRecordAction(
+                    login.Session.LoginMethod, login.Session.Scope, collection, "create")
+                    && AtProtoOAuthScopes.AllowsRecordAction(
+                        login.Session.LoginMethod, login.Session.Scope, collection, "update")
+                : AtProtoOAuthScopes.AllowsRecordAction(
+                    login.Session.LoginMethod,
+                    login.Session.Scope,
                     collection,
-                    key,
-                    requestedJson,
-                    cancellationToken);
-
-            var action = mode == AtProtoWriteMode.Update ? "update" : "create";
-            if (!AtProtoOAuthScopes.AllowsRecordAction(
-                login.Session.LoginMethod,
-                login.Session.Scope,
-                collection,
-                action))
+                    mode == AtProtoWriteMode.Update ? "update" : "create");
+            if (!allowsWrite)
             {
+                var action = mode == AtProtoWriteMode.Upsert
+                    ? "create and update"
+                    : mode == AtProtoWriteMode.Update ? "update" : "create";
                 return Failure(
                     "The current login scope does not allow " + action
                     + " for " + collection + ".");
@@ -542,6 +658,8 @@ namespace AtProtoUnity
                 ["collection"] = collection,
                 ["record"] = jsonResult.Value
             };
+            if (requireSchemaValidation)
+                request["validate"] = true;
             if (mode == AtProtoWriteMode.Create)
             {
                 if (!string.IsNullOrEmpty(key))
@@ -550,11 +668,12 @@ namespace AtProtoUnity
             else
             {
                 request["rkey"] = key;
-                if (!string.IsNullOrWhiteSpace(requestedExpectedRecordCid))
+                if (mode == AtProtoWriteMode.Update
+                    && !string.IsNullOrWhiteSpace(requestedExpectedRecordCid))
                     request["swapRecord"] = requestedExpectedRecordCid.Trim();
             }
 
-            var method = mode == AtProtoWriteMode.Update
+            var method = mode == AtProtoWriteMode.Update || mode == AtProtoWriteMode.Upsert
                 ? "com.atproto.repo.putRecord"
                 : "com.atproto.repo.createRecord";
             var url = AtProtoClient.BuildXrpcUrl(
@@ -565,6 +684,15 @@ namespace AtProtoUnity
                 url,
                 request,
                 cancellationToken);
+            var canSafelyRetry = mode == AtProtoWriteMode.Upsert
+                || (mode == AtProtoWriteMode.Update && string.IsNullOrWhiteSpace(requestedExpectedRecordCid));
+            if (!response.Succeeded && canSafelyRetry && response.Error.StatusCode == 0)
+            {
+                response = await login.AuthenticatedClient.PostJsonAsync(
+                    url,
+                    request,
+                    cancellationToken);
+            }
             if (!response.Succeeded)
                 return AtProtoResult<AtProtoRecord>.Failure(response.Error);
 
@@ -581,7 +709,7 @@ namespace AtProtoUnity
                     return Failure("The PDS response did not contain a record URI and CID.");
                 written = new AtProtoRecord(uri, cid, jsonResult.Value);
                 if (!string.Equals(written.CollectionNsid, collection, StringComparison.Ordinal)
-                    || (mode == AtProtoWriteMode.Update
+                    || (mode != AtProtoWriteMode.Create
                         && !string.Equals(written.RecordKey, key, StringComparison.Ordinal)))
                     return Failure("The PDS response did not match the requested record.");
             }
@@ -592,6 +720,7 @@ namespace AtProtoUnity
             }
 
             LastWrittenRecord = written;
+            lastWrittenRecordCanBeDeleted = true;
             collectionNsid = written.CollectionNsid;
             recordKey = written.RecordKey;
             expectedRecordCid = written.Cid;
@@ -599,59 +728,6 @@ namespace AtProtoUnity
                 rawJson = written.Value?.ToString(Formatting.Indented) ?? requestedJson;
             RecordWritten?.Invoke(written);
             return AtProtoResult<AtProtoRecord>.Success(written);
-        }
-
-        async Awaitable<AtProtoResult<AtProtoRecord>> UpsertJsonAsync(
-            string collection,
-            string key,
-            string requestedJson,
-            CancellationToken cancellationToken)
-        {
-            var identity = login.Identity;
-            if (identity == null || string.IsNullOrEmpty(identity.Did))
-                return Failure("The authenticated session has no repository DID.");
-
-            Debug.Log(
-                "[AtProto] Upsert lookup: " + TargetLabel(collection, key),
-                this);
-            var existing = await login.AuthenticatedClient.GetRecordAsync(
-                identity,
-                collection,
-                key,
-                cancellationToken);
-            if (existing.Succeeded)
-            {
-                Debug.Log(
-                    "[AtProto] Upsert found an existing record with CID "
-                    + existing.Value.Cid + "; updating it.",
-                    this);
-                return await WriteJsonAsync(
-                    AtProtoWriteMode.Update,
-                    collection,
-                    key,
-                    existing.Value.Cid,
-                    requestedJson,
-                    cancellationToken);
-            }
-            if (!IsMissingRecord(existing.Error))
-            {
-                Debug.LogError(
-                    "[AtProto] Upsert lookup failed: "
-                    + (existing.Error?.ToString() ?? "Unknown lookup error."),
-                    this);
-                return AtProtoResult<AtProtoRecord>.Failure(existing.Error);
-            }
-
-            Debug.Log(
-                "[AtProto] Upsert did not find the record; creating it.",
-                this);
-            return await WriteJsonAsync(
-                AtProtoWriteMode.Create,
-                collection,
-                key,
-                null,
-                requestedJson,
-                cancellationToken);
         }
 
         static AtProtoResult<JObject> ParseRecordValue(string value)
@@ -677,26 +753,7 @@ namespace AtProtoUnity
 
         static bool IsValidRecordKey(string value)
         {
-            if (string.IsNullOrWhiteSpace(value) || value.Length > 512)
-                return false;
-
-            foreach (var character in value)
-            {
-                if (char.IsWhiteSpace(character)
-                    || character == '/' || character == '?' || character == '#')
-                    return false;
-            }
-            return true;
-        }
-
-        static bool IsMissingRecord(AtProtoRequestError error)
-        {
-            return error != null
-                && (error.StatusCode == 404
-                    || string.Equals(
-                        error.ErrorCode,
-                        "RecordNotFound",
-                        StringComparison.OrdinalIgnoreCase));
+            return AtProtoLexiconDocument.IsValidRecordKey(value);
         }
 
         static AtProtoResult<AtProtoRecord> Failure(string message)
