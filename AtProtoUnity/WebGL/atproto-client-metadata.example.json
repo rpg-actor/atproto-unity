@@ -1,0 +1,19 @@
+{
+  "client_id": "https://game.example/atproto-client-metadata.json",
+  "client_name": "Unity Game",
+  "client_uri": "https://game.example/",
+  "application_type": "web",
+  "redirect_uris": [
+    "https://game.example/AtProtoOAuthCallback.html"
+  ],
+  "grant_types": [
+    "authorization_code",
+    "refresh_token"
+  ],
+  "response_types": [
+    "code"
+  ],
+  "scope": "atproto",
+  "token_endpoint_auth_method": "none",
+  "dpop_bound_access_tokens": true
+}

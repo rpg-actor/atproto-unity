@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign-in complete</title>
+</head>
+<body>
+  <p id="status">Returning to the game...</p>
+  <script>
+    (function () {
+      var query = new URLSearchParams(window.location.search);
+      var message = {
+        type: 'atproto-oauth-callback',
+        code: query.get('code'),
+        state: query.get('state'),
+        iss: query.get('iss'),
+        error: query.get('error'),
+        error_description: query.get('error_description')
+      };
+
+      if (window.opener) {
+        window.opener.postMessage(message, window.location.origin);
+      } else if (typeof BroadcastChannel !== 'undefined') {
+        var channel = new BroadcastChannel('atproto-oauth-callback');
+        channel.postMessage(message);
+        channel.close();
+      }
+
+      if (message.code || message.error) {
+        window.close();
+      } else {
+        document.getElementById('status').textContent = 'The sign-in response was incomplete. You can close this tab.';
+      }
+    })();
+  </script>
+</body>
+</html>

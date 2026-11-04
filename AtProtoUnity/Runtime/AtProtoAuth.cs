@@ -12,6 +12,13 @@ namespace AtProtoUnity
         Password
     }
 
+    public enum AtProtoOAuthRedirectMode
+    {
+        Auto,
+        DesktopLoopback,
+        WebGlBrowser
+    }
+
     public enum AtProtoLoginState
     {
         SignedOut,
@@ -89,6 +96,7 @@ namespace AtProtoUnity
     {
         public string Code { get; }
         public string State { get; }
+        public string Issuer { get; }
         public string Error { get; }
         public string ErrorDescription { get; }
 
@@ -98,12 +106,14 @@ namespace AtProtoUnity
             string code,
             string state,
             string error = null,
-            string errorDescription = null)
+            string errorDescription = null,
+            string issuer = null)
         {
             Code = code;
             State = state;
             Error = error;
             ErrorDescription = errorDescription;
+            Issuer = issuer;
         }
     }
 
@@ -119,5 +129,10 @@ namespace AtProtoUnity
     public interface IAtProtoOAuthRedirectHandlerFactory
     {
         IAtProtoOAuthRedirectHandler Create();
+    }
+
+    public interface IAtProtoOAuthAuthorizationLauncher
+    {
+        void OpenAuthorizationUrl(string url);
     }
 }

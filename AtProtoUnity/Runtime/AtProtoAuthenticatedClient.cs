@@ -45,6 +45,9 @@ namespace AtProtoUnity
                 || (session.LoginMethod == AtProtoLoginMethod.OAuth && keyPair == null))
                 return AtProtoResult<AtProtoHttpResponse>.Failure(
                     new AtProtoRequestError("An authenticated AT Protocol session is required."));
+            if (!IsAllowedRequestUrl(url, session.PdsEndpoint))
+                return AtProtoResult<AtProtoHttpResponse>.Failure(
+                    new AtProtoRequestError("Authenticated requests must target the signed-in account's HTTPS PDS."));
 
             var refreshed = await RefreshIfNeededAsync(cancellationToken);
             if (!refreshed.Succeeded)
@@ -369,6 +372,21 @@ namespace AtProtoUnity
             }
 
             throw new InvalidOperationException("The authenticated request retry loop did not complete.");
+        }
+
+        static bool IsAllowedRequestUrl(string url, string pdsEndpoint)
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var requestUri)
+                || !Uri.TryCreate(pdsEndpoint, UriKind.Absolute, out var pdsUri)
+                || !string.Equals(requestUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(pdsUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+                || !string.IsNullOrEmpty(requestUri.UserInfo)
+                || !string.IsNullOrEmpty(pdsUri.UserInfo)
+                || !string.IsNullOrEmpty(requestUri.Fragment))
+                return false;
+
+            return string.Equals(requestUri.IdnHost, pdsUri.IdnHost, StringComparison.OrdinalIgnoreCase)
+                && requestUri.Port == pdsUri.Port;
         }
 
         sealed class RecordListResponse

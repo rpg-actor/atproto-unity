@@ -97,6 +97,13 @@ namespace AtProtoUnity
                     new AtProtoRequestError("The DID document was not valid JSON.", exception));
             }
 
+            if (!DoesDidDocumentMatch(didDocument?.id, resolved.did))
+                return AtProtoResult<AtProtoIdentity>.Failure(
+                    new AtProtoRequestError("The DID document identifier did not match the resolved DID."));
+            if (!DoesDidDocumentClaimHandle(didDocument?.alsoKnownAs, normalizedHandle))
+                return AtProtoResult<AtProtoIdentity>.Failure(
+                    new AtProtoRequestError("The DID document does not claim the handle '" + normalizedHandle + "'."));
+
             var pdsEndpoint = FindPdsEndpoint(didDocument);
             if (string.IsNullOrEmpty(pdsEndpoint))
                 return AtProtoResult<AtProtoIdentity>.Failure(
@@ -141,6 +148,9 @@ namespace AtProtoUnity
                     new AtProtoRequestError("The DID document was not valid JSON.", exception));
             }
 
+            if (!DoesDidDocumentMatch(document?.id, normalizedDid))
+                return AtProtoResult<string>.Failure(
+                    new AtProtoRequestError("The DID document identifier did not match the requested DID."));
             var pdsEndpoint = FindPdsEndpoint(document);
             return string.IsNullOrEmpty(pdsEndpoint)
                 ? AtProtoResult<string>.Failure(
@@ -267,7 +277,9 @@ namespace AtProtoUnity
                                 responseHeaders));
                     }
 
-                    if (request.result != UnityWebRequest.Result.ConnectionError || attempt > 0)
+                    if (request.result != UnityWebRequest.Result.ConnectionError
+                        || attempt > 0
+                        || !CanRetryAfterConnectionError(method))
                         return AtProtoResult<AtProtoHttpResponse>.Failure(
                             CreateError(request, url, responseHeaders));
                 }
@@ -734,6 +746,25 @@ namespace AtProtoUnity
                 : handle.Trim().TrimStart('@').ToLowerInvariant();
         }
 
+        static bool DoesDidDocumentClaimHandle(IEnumerable<string> alsoKnownAs, string handle)
+        {
+            var expected = "at://" + handle;
+            if (alsoKnownAs == null)
+                return false;
+            foreach (var alias in alsoKnownAs)
+            {
+                if (string.Equals(alias, expected, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+
+        static bool DoesDidDocumentMatch(string documentDid, string expectedDid)
+        {
+            return !string.IsNullOrEmpty(documentDid)
+                && string.Equals(documentDid, expectedDid, StringComparison.Ordinal);
+        }
+
         static string TrimEndpoint(string endpoint, string parameterName)
         {
             if (string.IsNullOrWhiteSpace(endpoint))
@@ -748,6 +779,12 @@ namespace AtProtoUnity
             return Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps;
         }
 
+        static bool CanRetryAfterConnectionError(string method)
+        {
+            return string.Equals(method, "GET", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(method, "HEAD", StringComparison.OrdinalIgnoreCase);
+        }
+
         // Response shapes for Newtonsoft; only the fields this client reads.
         class ResolveHandleResponse
         {
@@ -756,6 +793,8 @@ namespace AtProtoUnity
 
         class DidDocument
         {
+            public string id;
+            public string[] alsoKnownAs;
             public DidService[] service;
         }
 
@@ -1010,18 +1049,25 @@ namespace AtProtoUnity
                 return "This account has been deactivated and cannot sign in.";
             if (string.Equals(errorCode, "AuthFactorTokenRequired", StringComparison.OrdinalIgnoreCase))
                 return "This account requires an additional verification step that this login form does not support.";
-            if (ContainsIgnoreCase(Message, "Password login failed")
-                || ContainsIgnoreCase(Message, "login failed"))
+            if (ContainsIgnoreCase(Message, "OAuth login failed"))
+                return "The browser login could not be completed. Check the browser console for details and try again.";
+            if (ContainsIgnoreCase(Message, "Password login failed"))
             {
                 return string.IsNullOrEmpty(credentialLabel)
                     ? "The login was not accepted. Check your details and try again."
                     : "The handle or " + credentialLabel + " was not accepted. Check both and try again.";
             }
-            if (ContainsIgnoreCase(Message, "OAuth login failed"))
-                return "The browser login could not be completed. Please try again.";
+            if (ContainsIgnoreCase(Message, "login failed"))
+            {
+                return string.IsNullOrEmpty(credentialLabel)
+                    ? "The login was not accepted. Check your details and try again."
+                    : "The handle or " + credentialLabel + " was not accepted. Check both and try again.";
+            }
             if (string.Equals(errorCode, "InvalidLogin", StringComparison.OrdinalIgnoreCase)
                 || StatusCode == 401)
             {
+                if (string.Equals(credentialLabel, "login confirmation", StringComparison.OrdinalIgnoreCase))
+                    return "The authorization server rejected the sign-in. Start again; if it repeats, check the OAuth configuration.";
                 return string.IsNullOrEmpty(credentialLabel)
                     ? "Your login session is no longer valid. Please sign in again."
                     : "The handle or " + credentialLabel + " was not accepted. Check both and try again.";

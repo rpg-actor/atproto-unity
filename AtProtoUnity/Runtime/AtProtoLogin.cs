@@ -16,6 +16,9 @@ namespace AtProtoUnity
 
         [SerializeField] string handle;
         [SerializeField] string clientId = "http://localhost";
+        [SerializeField] AtProtoOAuthRedirectMode oauthRedirectMode = AtProtoOAuthRedirectMode.Auto;
+        [SerializeField] string webGlClientMetadataUrl;
+        [SerializeField] string webGlRedirectUri;
         [SerializeField] string resource;
         [SerializeField] string identityEndpoint = AtProtoClient.DefaultIdentityEndpoint;
         [SerializeField] string plcDirectoryEndpoint = AtProtoClient.DefaultPlcDirectoryEndpoint;
@@ -29,6 +32,7 @@ namespace AtProtoUnity
         CancellationTokenSource operationCancellation;
         TaskCompletionSource<AtProtoResult<AtProtoAuthSession>> refreshTask;
         IAtProtoOAuthRedirectHandlerFactory redirectHandlerFactory;
+        bool customRedirectHandlerFactory;
         AtProtoAuthSession session;
         AtProtoLoginState state = AtProtoLoginState.SignedOut;
         AtProtoRequestError lastError;
@@ -44,6 +48,24 @@ namespace AtProtoUnity
         {
             get => clientId;
             set => clientId = value;
+        }
+
+        public AtProtoOAuthRedirectMode OAuthRedirectMode
+        {
+            get => oauthRedirectMode;
+            set => oauthRedirectMode = value;
+        }
+
+        public string WebGlClientMetadataUrl
+        {
+            get => webGlClientMetadataUrl;
+            set => webGlClientMetadataUrl = value;
+        }
+
+        public string WebGlRedirectUri
+        {
+            get => webGlRedirectUri;
+            set => webGlRedirectUri = value;
         }
 
         public string Scope => AtProtoOAuthScopes.BuildScope(recordPermissions, blobPermission);
@@ -84,7 +106,11 @@ namespace AtProtoUnity
                 EnsureRuntime();
                 return redirectHandlerFactory;
             }
-            set => redirectHandlerFactory = value;
+            set
+            {
+                redirectHandlerFactory = value;
+                customRedirectHandlerFactory = value != null;
+            }
         }
 
         public event Action<AtProtoLoginState> StateChanged;
@@ -134,13 +160,38 @@ namespace AtProtoUnity
             IAtProtoOAuthRedirectHandler redirectHandler = null;
             AtProtoDpopKeyPair loginKeyPair = null;
             var focusWindow = IntPtr.Zero;
+            var stage = "configuration validation";
             try
             {
+                LogOAuthStage("Starting OAuth login.");
+                var platformMode = Application.platform == RuntimePlatform.WebGLPlayer
+                    ? AtProtoOAuthRedirectMode.WebGlBrowser
+                    : AtProtoOAuthRedirectMode.DesktopLoopback;
+                var selectedMode = oauthRedirectMode == AtProtoOAuthRedirectMode.Auto
+                    ? platformMode
+                    : oauthRedirectMode;
+                if (selectedMode != platformMode)
+                    return Fail(new AtProtoRequestError(
+                        "The selected OAuth callback mode is not supported on this platform. Use Auto."));
+                if (selectedMode == AtProtoOAuthRedirectMode.WebGlBrowser
+                    && !IsValidWebGlClientMetadataUrl(webGlClientMetadataUrl))
+                    return Fail(new AtProtoRequestError(
+                        "WebGL OAuth requires a hosted HTTPS client metadata URL, or http://localhost for local development."));
+
+                stage = "callback setup";
+                LogOAuthStage("Setting up the browser callback.");
+                redirectHandler = redirectHandlerFactory.Create();
+                LogOAuthStage("Callback URL: " + redirectHandler.RedirectUri);
+
+                stage = "handle resolution";
+                LogOAuthStage("Resolving the account handle.");
                 var identityResult = await client.ResolveHandleAsync(loginHandle, cancellationToken);
                 if (!identityResult.Succeeded)
                     return Fail(identityResult.Error);
 
                 var identity = identityResult.Value;
+                stage = "OAuth metadata discovery";
+                LogOAuthStage("Handle resolved; discovering OAuth server metadata.");
                 var oauthResource = string.IsNullOrWhiteSpace(resource)
                     ? identity.PdsEndpoint
                     : resource.Trim();
@@ -151,17 +202,23 @@ namespace AtProtoUnity
                     return Fail(metadataResult.Error);
                 var metadata = metadataResult.Value;
 
+                stage = "OAuth metadata validation";
+                LogOAuthStage("OAuth server metadata received; validating it.");
                 ValidateMetadata(metadata);
-                redirectHandler = redirectHandlerFactory.Create();
                 loginKeyPair = AtProtoOAuthCrypto.CreateDpopKeyPair();
                 var pkce = AtProtoOAuthCrypto.CreatePkceChallenge();
                 var stateToken = AtProtoOAuthCrypto.CreateRandomToken(16);
+                var configuredClientId = selectedMode == AtProtoOAuthRedirectMode.WebGlBrowser
+                    ? webGlClientMetadataUrl
+                    : clientId;
                 var effectiveClientId = BuildClientId(
-                    clientId,
+                    configuredClientId,
                     redirectHandler.RedirectUri,
                     Scope);
 
                 var nonce = new DpopNonceState();
+                stage = "authorization request";
+                LogOAuthStage("Sending the pushed authorization request.");
                 var authorizationUrl = await BuildAuthorizationUrlAsync(
                     metadata,
                     effectiveClientId,
@@ -177,10 +234,18 @@ namespace AtProtoUnity
                     return Fail(authorizationUrl.Error);
 
                 focusWindow = AtProtoWindowFocus.Capture();
-                Application.OpenURL(authorizationUrl.Value);
+                stage = "browser authorization";
+                LogOAuthStage("Opening the authorization popup.");
+                if (redirectHandler is IAtProtoOAuthAuthorizationLauncher launcher)
+                    launcher.OpenAuthorizationUrl(authorizationUrl.Value);
+                else
+                    Application.OpenURL(authorizationUrl.Value);
+                LogOAuthStage("Waiting for the authorization callback.");
                 var callback = await redirectHandler.WaitForCallbackAsync(
                     CallbackTimeout,
                     cancellationToken);
+                stage = "callback validation";
+                LogOAuthStage("Callback received; validating state and issuer.");
                 if (!callback.Succeeded)
                     return Fail(new AtProtoRequestError(
                         string.IsNullOrEmpty(callback.ErrorDescription)
@@ -189,7 +254,12 @@ namespace AtProtoUnity
                 if (!string.Equals(callback.State, stateToken, StringComparison.Ordinal))
                     return Fail(new AtProtoRequestError(
                         "The OAuth state did not match the login request."));
+                if (!string.Equals(callback.Issuer, metadata.Issuer, StringComparison.Ordinal))
+                    return Fail(new AtProtoRequestError(
+                        "The OAuth response issuer did not match the authorization server."));
 
+                stage = "token exchange";
+                LogOAuthStage("Exchanging the authorization code for tokens.");
                 var tokenResult = await ExchangeCodeAsync(
                     metadata,
                     effectiveClientId,
@@ -206,6 +276,7 @@ namespace AtProtoUnity
 
                 ActivateSession(tokenResult.Value, loginKeyPair);
                 loginKeyPair = null;
+                LogOAuthStage("OAuth sign-in succeeded.");
                 return AtProtoResult<AtProtoAuthSession>.Success(session);
             }
             catch (OperationCanceledException)
@@ -215,7 +286,7 @@ namespace AtProtoUnity
             }
             catch (Exception exception)
             {
-                return Fail(new AtProtoRequestError("OAuth login failed.", exception));
+                return Fail(new AtProtoRequestError("OAuth login failed during " + stage + ".", exception));
             }
             finally
             {
@@ -498,7 +569,10 @@ namespace AtProtoUnity
             {
                 var metadata = JsonConvert.DeserializeObject<AtProtoOAuthMetadata>(
                     metadataResponse.Value.Body);
-                metadata.Issuer = authorizationServer;
+                if (metadata == null
+                    || !string.Equals(metadata.Issuer?.TrimEnd('/'), authorizationServer, StringComparison.OrdinalIgnoreCase))
+                    return AtProtoResult<AtProtoOAuthMetadata>.Failure(
+                        new AtProtoRequestError("The OAuth issuer did not match the advertised authorization server."));
                 return AtProtoResult<AtProtoOAuthMetadata>.Success(metadata);
             }
             catch (Exception exception)
@@ -675,17 +749,25 @@ namespace AtProtoUnity
             if (token == null || string.IsNullOrEmpty(token.AccessToken))
                 return AtProtoResult<AtProtoAuthSession>.Failure(
                     new AtProtoRequestError("The OAuth token response did not contain an access token."));
+            if (!string.Equals(token.Subject, identity.Did, StringComparison.Ordinal))
+                return AtProtoResult<AtProtoAuthSession>.Failure(
+                    new AtProtoRequestError("The OAuth token account did not match the resolved identity."));
+            if (string.IsNullOrWhiteSpace(token.Scope)
+                || !new HashSet<string>(token.Scope.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries), StringComparer.Ordinal)
+                    .Contains("atproto"))
+                return AtProtoResult<AtProtoAuthSession>.Failure(
+                    new AtProtoRequestError("The OAuth token response did not include the required atproto scope."));
 
             var expiresIn = token.ExpiresIn > 0 ? token.ExpiresIn : 3600;
             return AtProtoResult<AtProtoAuthSession>.Success(
                 new AtProtoAuthSession(
-                    string.IsNullOrEmpty(token.Subject) ? identity.Did : token.Subject,
+                    token.Subject,
                     identity.Handle,
                     identity.PdsEndpoint,
                     previous.AuthorizationServer,
                     previous.TokenEndpoint,
                     previous.ClientId,
-                    string.IsNullOrEmpty(token.Scope) ? previous.Scope : token.Scope,
+                    token.Scope,
                     previous.Resource,
                     token.AccessToken,
                     string.IsNullOrEmpty(token.RefreshToken) ? previous.RefreshToken : token.RefreshToken,
@@ -771,7 +853,19 @@ namespace AtProtoUnity
                 client = new AtProtoClient(identityEndpoint, plcDirectoryEndpoint);
             }
 
-            redirectHandlerFactory ??= new LoopbackAtProtoOAuthRedirectHandlerFactory();
+            if (!customRedirectHandlerFactory)
+            {
+#if UNITY_WEBGL && !UNITY_EDITOR
+                redirectHandlerFactory = new WebGlAtProtoOAuthRedirectHandlerFactory(webGlRedirectUri);
+#else
+                redirectHandlerFactory = new LoopbackAtProtoOAuthRedirectHandlerFactory();
+#endif
+            }
+        }
+
+        void LogOAuthStage(string message)
+        {
+            Debug.Log("AT Protocol OAuth: " + message, this);
         }
 
         void Begin(Func<CancellationToken, Awaitable<AtProtoResult<AtProtoAuthSession>>> operationFactory)
@@ -857,6 +951,18 @@ namespace AtProtoUnity
                 return configuredClientId;
             return configuredClientId + "?redirect_uri=" + Uri.EscapeDataString(redirectUri)
                 + "&scope=" + Uri.EscapeDataString(requestedScope ?? string.Empty);
+        }
+
+        static bool IsValidWebGlClientMetadataUrl(string value)
+        {
+            if (AtProtoClient.IsHttpsUrl(value))
+                return true;
+            return Uri.TryCreate(value, UriKind.Absolute, out var uri)
+                && string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase)
+                && uri.IsDefaultPort && uri.AbsolutePath == "/"
+                && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment)
+                && string.IsNullOrEmpty(uri.UserInfo);
         }
 
         static string FormEncode(IReadOnlyDictionary<string, string> values)

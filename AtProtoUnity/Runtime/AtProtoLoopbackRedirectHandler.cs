@@ -17,7 +17,7 @@ namespace AtProtoUnity
     }
 
     // Desktop redirect handler; the listener only binds to the loopback interface.
-    public sealed class LoopbackAtProtoOAuthRedirectHandler : IAtProtoOAuthRedirectHandler
+    public sealed class LoopbackAtProtoOAuthRedirectHandler : IAtProtoOAuthRedirectHandler, IAtProtoOAuthAuthorizationLauncher
     {
         readonly TcpListener listener;
         readonly Thread listenerThread;
@@ -68,6 +68,11 @@ namespace AtProtoUnity
             lock (sync)
                 disposed = true;
             listener.Stop();
+        }
+
+        public void OpenAuthorizationUrl(string url)
+        {
+            Application.OpenURL(url);
         }
 
         void Listen()
@@ -152,6 +157,7 @@ namespace AtProtoUnity
             var query = callbackUri.Query.TrimStart('?').Split('&');
             string code = null;
             string state = null;
+            string issuer = null;
             string error = null;
             string errorDescription = null;
             foreach (var item in query)
@@ -167,12 +173,13 @@ namespace AtProtoUnity
                 {
                     case "code": code = value; break;
                     case "state": state = value; break;
+                    case "iss": issuer = value; break;
                     case "error": error = value; break;
                     case "error_description": errorDescription = value; break;
                 }
             }
 
-            return new AtProtoOAuthCallback(code, state, error, errorDescription);
+            return new AtProtoOAuthCallback(code, state, error, errorDescription, issuer);
         }
 
         static string DecodeQueryValue(string value)

@@ -1,27 +1,44 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Threading;
 using UnityEditor;
+using UnityEditor.Build;
+using UnityEditor.Build.Reporting;
+using UnityEditor.PackageManager;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace AtProtoUnity.Editor
 {
     [CustomEditor(typeof(AtProtoLogin))]
     sealed class AtProtoLoginEditor : UnityEditor.Editor
     {
+        const int MaxPermissionSearchResults = 8;
         SerializedProperty loginMethod;
         SerializedProperty handle;
         SerializedProperty clientId;
+        SerializedProperty oauthRedirectMode;
+        SerializedProperty webGlClientMetadataUrl;
+        SerializedProperty webGlRedirectUri;
         SerializedProperty resource;
         SerializedProperty recordPermissions;
         SerializedProperty blobPermission;
         SerializedProperty identityEndpoint;
         SerializedProperty plcDirectoryEndpoint;
+        IReadOnlyList<string> permissionSearchResults = Array.Empty<string>();
+        string permissionSearchMessage;
+        string permissionSearchPrefix;
+        int permissionSearchIndex = -1;
 
         void OnEnable()
         {
             loginMethod = serializedObject.FindProperty("loginMethod");
             handle = serializedObject.FindProperty("handle");
             clientId = serializedObject.FindProperty("clientId");
+            oauthRedirectMode = serializedObject.FindProperty("oauthRedirectMode");
+            webGlClientMetadataUrl = serializedObject.FindProperty("webGlClientMetadataUrl");
+            webGlRedirectUri = serializedObject.FindProperty("webGlRedirectUri");
             resource = serializedObject.FindProperty("resource");
             recordPermissions = serializedObject.FindProperty("recordPermissions");
             blobPermission = serializedObject.FindProperty("blobPermission");
@@ -46,8 +63,40 @@ namespace AtProtoUnity.Editor
             if (method == 0)
             {
                 EditorGUILayout.Space(6f);
-                EditorGUILayout.LabelField("OAuth Client", EditorStyles.boldLabel);
-                EditorGUILayout.PropertyField(clientId, new GUIContent("Client ID"));
+                EditorGUILayout.LabelField("OAuth Callback", EditorStyles.boldLabel);
+                EditorGUILayout.PropertyField(oauthRedirectMode, new GUIContent("Mode"));
+                var webGlBuild = EditorUserBuildSettings.activeBuildTarget == BuildTarget.WebGL;
+                var webGlCallback = oauthRedirectMode.enumValueIndex == (int)AtProtoOAuthRedirectMode.WebGlBrowser
+                    || oauthRedirectMode.enumValueIndex == (int)AtProtoOAuthRedirectMode.Auto && webGlBuild;
+                EditorGUILayout.HelpBox(
+                    "Auto uses the browser callback in WebGL players and loopback on desktop. Editor Play mode always uses the desktop callback.",
+                    MessageType.Info);
+                if (webGlBuild && oauthRedirectMode.enumValueIndex == (int)AtProtoOAuthRedirectMode.DesktopLoopback)
+                    EditorGUILayout.HelpBox("Desktop loopback cannot run in a WebGL player. Select Auto or WebGL browser.", MessageType.Warning);
+                else if (!webGlBuild && oauthRedirectMode.enumValueIndex == (int)AtProtoOAuthRedirectMode.WebGlBrowser)
+                    EditorGUILayout.HelpBox("The WebGL callback can only run in a WebGL player. Select Auto or desktop loopback.", MessageType.Warning);
+                if (webGlCallback)
+                {
+                    if (GUILayout.Button("Configure Local OAuth Test"))
+                    {
+                        webGlClientMetadataUrl.stringValue = "http://localhost";
+                        webGlRedirectUri.stringValue = string.Empty;
+                        oauthRedirectMode.enumValueIndex = (int)AtProtoOAuthRedirectMode.Auto;
+                    }
+                    EditorGUILayout.PropertyField(webGlClientMetadataUrl, new GUIContent("Client metadata URL"));
+                    EditorGUILayout.PropertyField(webGlRedirectUri, new GUIContent("Redirect URI override"));
+                    EditorGUILayout.HelpBox(
+                        "For a local test, click Configure Local OAuth Test. In Player Settings > WebGL > Publishing Settings, set Compression Format to Disabled, then use Build (not Build And Run). From the output folder run: python -m http.server 8000 --bind 127.0.0.1. Open http://127.0.0.1:8000/, enter a handle, and press Login. Allow the popup. Published builds need hosted HTTPS client metadata.",
+                        MessageType.Info);
+                    if (!AtProtoOAuthWebGlUrlValidation.IsClientMetadataUrl(webGlClientMetadataUrl.stringValue)
+                        || (!string.IsNullOrWhiteSpace(webGlRedirectUri.stringValue)
+                            && !AtProtoOAuthWebGlUrlValidation.IsRedirectUri(webGlRedirectUri.stringValue)))
+                        EditorGUILayout.HelpBox(
+                            "Use an HTTPS client metadata URL and HTTPS redirect URI, or http://localhost with a loopback IP callback for local development.",
+                            MessageType.Warning);
+                }
+                else
+                    EditorGUILayout.PropertyField(clientId, new GUIContent("Desktop client ID"));
                 EditorGUILayout.PropertyField(resource, new GUIContent("Resource"));
 
                 DrawRecordPermissions();
@@ -83,6 +132,12 @@ namespace AtProtoUnity.Editor
 
             if (recordPermissions == null)
                 return;
+
+            var searchStatus = AtProtoReaderEditor.GetOperationStatus(target);
+            if (searchStatus != null)
+                EditorGUILayout.HelpBox(searchStatus, MessageType.Info);
+            if (!string.IsNullOrEmpty(permissionSearchMessage))
+                EditorGUILayout.HelpBox(permissionSearchMessage, MessageType.Warning);
 
             for (var i = 0; i < recordPermissions.arraySize; i++)
             {
@@ -150,6 +205,13 @@ namespace AtProtoUnity.Editor
                         new GUIContent("Record type"),
                         collection.stringValue);
                     collection.stringValue = value;
+                    using (new EditorGUI.DisabledScope(
+                        !AtProtoLexiconClient.IsNamespaceSearchPrefix(collection.stringValue.Trim())
+                        || AtProtoReaderEditor.GetOperationStatus(target) != null))
+                    {
+                        if (GUILayout.Button("Search", EditorStyles.miniButton, GUILayout.Width(52f)))
+                            StartPermissionSearch(index, collection.stringValue);
+                    }
                     if (GUILayout.Button("Remove", EditorStyles.miniButton, GUILayout.Width(64f)))
                         return true;
                 }
@@ -159,6 +221,29 @@ namespace AtProtoUnity.Editor
                     collection.stringValue);
                 if (picked != null)
                     collection.stringValue = picked;
+
+                if (permissionSearchIndex == index
+                    && string.Equals(permissionSearchPrefix, collection.stringValue.Trim(), StringComparison.Ordinal))
+                {
+                    for (var resultIndex = 0;
+                        resultIndex < Mathf.Min(permissionSearchResults.Count, MaxPermissionSearchResults);
+                        resultIndex++)
+                    {
+                        var suggestion = permissionSearchResults[resultIndex];
+                        if (GUILayout.Button(suggestion, EditorStyles.linkLabel))
+                        {
+                            collection.stringValue = suggestion;
+                            GUI.FocusControl(null);
+                            permissionSearchResults = Array.Empty<string>();
+                            permissionSearchMessage = null;
+                            break;
+                        }
+                    }
+                    if (permissionSearchResults.Count > MaxPermissionSearchResults)
+                        EditorGUILayout.LabelField(
+                            "Showing the first " + MaxPermissionSearchResults + " results. Refine the namespace to narrow the search.",
+                            EditorStyles.wordWrappedMiniLabel);
+                }
 
                 EditorGUILayout.LabelField("Allowed actions", EditorStyles.miniLabel);
                 var actionRect = EditorGUILayout.GetControlRect(
@@ -179,6 +264,57 @@ namespace AtProtoUnity.Editor
                     delete.boolValue);
             }
             return false;
+        }
+
+        void StartPermissionSearch(int index, string prefix)
+        {
+            permissionSearchIndex = index;
+            permissionSearchPrefix = prefix.Trim();
+            permissionSearchResults = Array.Empty<string>();
+            permissionSearchMessage = null;
+            var client = new AtProtoLexiconClient(
+                identityEndpoint.stringValue,
+                plcDirectoryEndpoint.stringValue);
+            AtProtoReaderEditor.StartOperation(
+                target,
+                cancellationToken => SearchPermissionTypesAsync(
+                    index,
+                    permissionSearchPrefix,
+                    client,
+                    cancellationToken),
+                Repaint,
+                "Searching published record schemas...");
+        }
+
+        async Awaitable SearchPermissionTypesAsync(
+            int index,
+            string prefix,
+            AtProtoLexiconClient client,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+                {
+                    timeout.CancelAfter(TimeSpan.FromSeconds(90));
+                    var result = await client.SearchAsync(prefix, timeout.Token);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    permissionSearchIndex = index;
+                    permissionSearchPrefix = prefix;
+                    permissionSearchResults = result.Succeeded
+                        ? result.Value
+                        : Array.Empty<string>();
+                    permissionSearchMessage = result.Succeeded
+                        ? result.Value.Count == 0
+                            ? "No published record schemas match this namespace. You can still enter an NSID manually."
+                            : null
+                        : result.Error?.Message ?? "The published schema search failed.";
+                }
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                permissionSearchMessage = "Schema search timed out. Refine the namespace or enter an NSID manually.";
+            }
         }
 
         void DrawBlobPermission()
@@ -412,6 +548,132 @@ namespace AtProtoUnity.Editor
                     recentValues.RemoveRange(MaxRecents, recentValues.Count - MaxRecents);
                 EditorPrefs.SetString(RecentKey, string.Join("\n", recentValues));
             }
+        }
+    }
+
+    sealed class AtProtoOAuthWebGlBuildValidator : IProcessSceneWithReport
+    {
+        public int callbackOrder => 0;
+
+        public void OnProcessScene(Scene scene, BuildReport report)
+        {
+            if (report == null)
+                return;
+
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                foreach (var writer in root.GetComponentsInChildren<AtProtoWriter>(true))
+                    ValidateWriteOnLogin(writer);
+
+                if (report.summary.platform != BuildTarget.WebGL)
+                    continue;
+
+                foreach (var login in root.GetComponentsInChildren<AtProtoLogin>(true))
+                {
+                    if (login.LoginMethod != AtProtoLoginMethod.OAuth)
+                        continue;
+                    if (login.OAuthRedirectMode == AtProtoOAuthRedirectMode.DesktopLoopback)
+                        throw new BuildFailedException(
+                            "AT Protocol OAuth on WebGL cannot use the desktop loopback callback. Set callback mode to Auto or WebGlBrowser on '"
+                            + login.name + "'.");
+                    if (!AtProtoOAuthWebGlUrlValidation.IsClientMetadataUrl(login.WebGlClientMetadataUrl)
+                        || (!string.IsNullOrWhiteSpace(login.WebGlRedirectUri)
+                            && !AtProtoOAuthWebGlUrlValidation.IsRedirectUri(login.WebGlRedirectUri)))
+                        throw new BuildFailedException(
+                            "AT Protocol OAuth on WebGL requires a valid client metadata URL and optional redirect URI override on '"
+                            + login.name + "'. Configure them in the AtProtoLogin Inspector.");
+                }
+            }
+        }
+
+        static void ValidateWriteOnLogin(AtProtoWriter writer)
+        {
+            if (!writer.WriteOnLogin
+                || writer.Login == null
+                || writer.Login.LoginMethod != AtProtoLoginMethod.OAuth)
+                return;
+
+            var collection = writer.CollectionNsid?.Trim();
+            if (!AtProtoLexiconClient.IsValidNsid(collection))
+                throw new BuildFailedException(
+                    "AtProtoWriter '" + writer.name + "' has Write on login enabled but no valid collection NSID. Configure its composer or collection before building.");
+
+            if (writer.Composer is AtProtoSchemaComposer schema && schema.HasSchema)
+            {
+                var keyError = schema.Document.GetRecordKeyValidationMessage(
+                    writer.RecordKey,
+                    writer.WriteMode);
+                if (keyError != null)
+                    throw new BuildFailedException(
+                        "AtProtoWriter '" + writer.name + "' cannot write on login: " + keyError);
+            }
+
+            var requiredActions = writer.WriteMode == AtProtoWriteMode.Create
+                ? new[] { "create" }
+                : writer.WriteMode == AtProtoWriteMode.Update
+                    ? new[] { "update" }
+                    : new[] { "create", "update" };
+            foreach (var action in requiredActions)
+            {
+                if (!AtProtoOAuthScopes.AllowsRecordAction(
+                    writer.Login.LoginMethod,
+                    writer.Login.Scope,
+                    collection,
+                    action))
+                    throw new BuildFailedException(
+                        "AtProtoWriter '" + writer.name + "' writes on login using "
+                        + writer.WriteMode + " for '" + collection + "', but its AtProtoLogin does not request '"
+                        + action + "' permission for that collection. Add the permission and sign in again after building.");
+            }
+        }
+
+    }
+
+    static class AtProtoOAuthWebGlUrlValidation
+    {
+        public static bool IsClientMetadataUrl(string value)
+        {
+            if (Uri.TryCreate(value, UriKind.Absolute, out var uri)
+                && string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+                return true;
+            return Uri.TryCreate(value, UriKind.Absolute, out uri)
+                && string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase)
+                && uri.IsDefaultPort && uri.AbsolutePath == "/"
+                && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment)
+                && string.IsNullOrEmpty(uri.UserInfo);
+        }
+
+        public static bool IsRedirectUri(string value)
+        {
+            if (Uri.TryCreate(value, UriKind.Absolute, out var uri)
+                && string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+                return true;
+            return Uri.TryCreate(value, UriKind.Absolute, out uri)
+                && string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+                && System.Net.IPAddress.TryParse(uri.Host, out var address)
+                && System.Net.IPAddress.IsLoopback(address);
+        }
+    }
+
+    sealed class AtProtoOAuthWebGlCallbackPostprocessor : IPostprocessBuildWithReport
+    {
+        public int callbackOrder => 0;
+
+        public void OnPostprocessBuild(BuildReport report)
+        {
+            if (report.summary.platform != BuildTarget.WebGL)
+                return;
+
+            var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(AtProtoLogin).Assembly);
+            var source = package == null
+                ? null
+                : Path.Combine(package.resolvedPath, "WebGL", "AtProtoOAuthCallback.html");
+            if (string.IsNullOrEmpty(source) || !File.Exists(source))
+                throw new BuildFailedException("The AT Protocol WebGL OAuth callback page is missing from the package.");
+
+            Directory.CreateDirectory(report.summary.outputPath);
+            File.Copy(source, Path.Combine(report.summary.outputPath, "AtProtoOAuthCallback.html"), true);
         }
     }
 }
