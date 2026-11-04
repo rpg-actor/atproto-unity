@@ -27,6 +27,7 @@ namespace AtProtoUnity.Editor
         string subgroupBuffer = string.Empty;
         float startingJsonHeight = 150f;
         float outputJsonHeight = 190f;
+        string schemaNsid;
 
         void OnEnable()
         {
@@ -37,11 +38,39 @@ namespace AtProtoUnity.Editor
             createdAtPath = serializedObject.FindProperty("createdAtPath");
             addUpdatedAt = serializedObject.FindProperty("addUpdatedAt");
             updatedAtPath = serializedObject.FindProperty("updatedAtPath");
+            schemaNsid = ((AtProtoRecordComposer)target).GetComponent<AtProtoWriter>()?.CollectionNsid ?? string.Empty;
         }
 
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
+
+            EditorGUILayout.LabelField("Raw Record Composer", EditorStyles.boldLabel);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                schemaNsid = EditorGUILayout.DelayedTextField("NSID", schemaNsid);
+                using (new EditorGUI.DisabledScope(!AtProtoLexiconClient.IsValidNsid(schemaNsid?.Trim())))
+                {
+                    if (GUILayout.Button("Use Live Schema", EditorStyles.miniButton, GUILayout.Width(115f)))
+                    {
+                        serializedObject.ApplyModifiedProperties();
+                        var raw = (AtProtoRecordComposer)target;
+                        var composer = raw.GetComponent<AtProtoSchemaComposer>();
+                        if (composer == null)
+                        {
+                            composer = Undo.AddComponent<AtProtoSchemaComposer>(raw.gameObject);
+                            composer.SetRecordValue(raw.BuildValue());
+                        }
+                        Undo.RecordObject(composer, "Use live record schema");
+                        composer.Nsid = schemaNsid.Trim();
+                        AtProtoSchemaComposerEditor.MarkChanged(composer);
+                        var writer = raw.GetComponent<AtProtoWriter>();
+                        if (writer != null && (writer.Composer == raw || writer.Composer == null))
+                            AtProtoSchemaComposerEditor.ConnectWriter(composer);
+                        GUIUtility.ExitGUI();
+                    }
+                }
+            }
 
             showStartingJson = EditorGUILayout.Foldout(
                 showStartingJson,

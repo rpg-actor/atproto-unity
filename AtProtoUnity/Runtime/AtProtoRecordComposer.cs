@@ -180,6 +180,7 @@ namespace AtProtoUnity
     }
 
     // Builds record JSON from starting JSON, then fields, then runtime Set* overrides, then timestamps.
+    [AddComponentMenu("AT Protocol/Raw Record Composer")]
     public sealed class AtProtoRecordComposer : MonoBehaviour, IAtProtoRecordJsonSource
     {
         [SerializeField, TextArea(8, 30)] string baseJson = "{}";

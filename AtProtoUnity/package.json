@@ -1,9 +1,11 @@
 {
   "name": "actor.rpg.atproto-unity",
   "version": "0.1.0",
-  "displayName": "AtProtoUnity",
-  "description": "AT Protocol client for Unity.",
+  "displayName": "AT Protocol Unity Toolkit",
+  "description": "AT Protocol authentication, repository access, and schema-driven record authoring for Unity.",
   "unity": "6000.3",
+  "keywords": ["atproto", "lexicon", "oauth", "bluesky"],
+  "documentationUrl": "https://github.com/rpg-actor/atproto-unity/tree/main/AtProtoUnity#readme",
   "dependencies": {
     "com.unity.modules.imageconversion": "1.0.0",
     "com.unity.modules.unitywebrequest": "1.0.0",
